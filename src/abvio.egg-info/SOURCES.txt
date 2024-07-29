@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/abvio/__init__.py
+src/abvio/read.py
+src/abvio/structure.py
+src/abvio.egg-info/PKG-INFO
+src/abvio.egg-info/SOURCES.txt
+src/abvio.egg-info/dependency_links.txt
+src/abvio.egg-info/top_level.txt
+tests/test_structure.py

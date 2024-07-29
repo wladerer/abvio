@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: abvio
+Version: 0.0.1
+Summary: A Python package to simplify VASP input files
+Author-email: William Laderer <wtladerer@gmail.com>
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Scientific/Engineering :: Physics
+Classifier: Topic :: Scientific/Engineering :: Chemistry
+Classifier: Topic :: Scientific/Engineering :: Materials Science
+Description-Content-Type: text/markdown
+
+# Abvio Repository
+
+
