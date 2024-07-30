@@ -314,12 +314,8 @@ def kpoints_model_from_dictionary(kpoints_dictionary: dict) -> Kpoints:
         "autoline": AutoLineKpoints,
     }
 
-    KpointsModel = mode_model_map.get(base_model.mode)
-    if KpointsModel is None:
-        log.error(f"Invalid mode: {mode}")
-        raise ValueError(f"Invalid mode: {mode}")
-
-    KpointsModel = KpointsModel.validate(kpoints_dictionary)
+    BaseKpointsModel = mode_model_map.get(base_model.mode)
+    KpointsModel = BaseKpointsModel.validate(kpoints_dictionary)
 
     return KpointsModel
 

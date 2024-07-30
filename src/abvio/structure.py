@@ -389,14 +389,12 @@ def structure_model_from_input_dict(structure_dictionary: dict) -> Structure:
         "external": ExternalStructure,
     }
 
-    StructureModel = mode_model_map.get(base_model.mode)
-    if StructureModel is None:
-        log.error(f"Invalid mode: {mode}")
-        raise ValueError(f"Invalid mode: {mode}")
-
-    StructureModel = StructureModel.validate(structure_dictionary)
+    BaseStructureModel = mode_model_map.get(base_model.mode)
+    StructureModel = BaseStructureModel.validate(structure_dictionary)
 
     return StructureModel
+
+
 
     
 
