@@ -12,7 +12,7 @@ from pydantic import ValidationError
 base_path = Path(__file__).parent
 structure_dir = os.path.join(base_path, 'structures')
 files_dir = os.path.join(base_path, 'files')
-vaspset_dir = os.path.join(base_path, 'vaspset')
+vaspset_dir = os.path.join(base_path, 'vaspsets')
 
 class TestKpointsBaseModel(unittest.TestCase):
 
@@ -109,6 +109,38 @@ class TestSurfaceKpoints(unittest.TestCase):
         self.assertTrue(model.requires_structure)
         self.assertIsInstance(kpoints, Kpoints)
 
+class TestGammaKpoints(unittest.TestCase):
+
+    def test_valid_gamma(self):
+        model = kp.GammaKpoints(spacing=[3, 3, 3])
+        self.assertFalse(model.requires_structure)
+        kpoints = model.kpoints()
+        self.assertIsInstance(kpoints, Kpoints)
+
+    def test_compare_from_file(self):
+        model = kp.GammaKpoints(spacing=[7, 7, 7])
+        kpoints = [list(kpt) for kpt in  model.kpoints().kpts ]
+        kpoints_from_file = Kpoints.from_file(os.path.join(vaspset_dir, 'fluorite', 'KPOINTS'))
+        expected_kpoints = [list(kpt) for kpt in kpoints_from_file.kpts]
+        self.assertEqual(kpoints, expected_kpoints)
+    
+    def test_write_kpoints(self):
+        model = kp.GammaKpoints(spacing=[7, 7, 7])
+        kpoints = model.kpoints()
+        kpoints.write_file(os.path.join('/tmp', 'test.kpoints'))
+
+
+class TestMonkhorstKpoints(unittest.TestCase):
+
+    def test_valid_monkhorst(self):
+        input_spacing = [2, 2, 1]
+        model = kp.MonkhorstKpoints(spacing=input_spacing)
+        kpoints = model.kpoints()
+        self.assertIsInstance(kpoints, Kpoints)
+
+        for kpoint,expected_value in zip(kpoints.kpts[0], input_spacing):
+            self.assertEqual(kpoint, expected_value)
+                    
 
 class TestAutoLinemodeFromInputDictionary(unittest.TestCase):
 
@@ -239,6 +271,8 @@ class TestKpointsModeDetection(unittest.TestCase):
         for test_dict in self.valid_test_dicts:
             kpoints = kp.kpoints_from_dictionary(test_dict['kpoints'], structure=test_structure)
             self.assertIsInstance(kpoints, Kpoints)
+            
+
 
 
 if __name__ == "__main__":

@@ -85,7 +85,7 @@ class GammaKpoints(BaseKpoints):
 
     mode: str = "gamma"
     spacing: IntArray3D
-    shift: IntArray3D = None
+    shift: IntArray3D = [0,0,0]
 
     def kpoints(self):
         kpoints = Kpoints.gamma_automatic(self.spacing, self.shift)
@@ -107,7 +107,7 @@ class MonkhorstKpoints(BaseKpoints):
 
     mode: str = "monkhorst"
     spacing: IntArray3D
-    shift: IntArray3D = None
+    shift: IntArray3D = [0,0,0]
 
     def kpoints(self):
         kpoints = Kpoints.monkhorst_automatic(self.spacing, self.shift)

@@ -227,7 +227,6 @@ class TestStructureFromInputDict(unittest.TestCase):
 
         model = st.structure_model_from_input_dict(input_dict)
         structure = model.structure
-
         self.assertIsInstance(structure, Structure)
 
     def test_invalid_input_dict(self):
