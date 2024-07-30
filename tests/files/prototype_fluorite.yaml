@@ -1,6 +1,8 @@
-poscar:
-    mode: internal
-    prototype: {fluorite: 5.516052}
+structure:
+    mode: prototype
+    prototype: fluorite 
+    lattice:
+        a: 5.516052
     species: [Ca, F]
 incar:
     ediff: 1e-6

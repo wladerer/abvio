@@ -1,6 +1,8 @@
-poscar:
-    mode: internal
-    prototype: {perovskite: 3.889471}
+structure:
+    mode: external
+    prototype: perovskite
+    lattice: 
+        a: 3.889471
     species: [Ca, Ti, O]
 incar:
     ediff: 1e-6

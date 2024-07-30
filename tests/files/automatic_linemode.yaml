@@ -29,5 +29,5 @@ incar:
     nsw: 4
     ibrion: 2
 kpoints:
-    kpoints: [4, 4, 4]
-    style: gamma
+    - mode: linemode
+    - spacing: 20
