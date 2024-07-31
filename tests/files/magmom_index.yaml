@@ -1,8 +1,8 @@
 structure:
     mode: manual
     species:
-        - Ca: 4
-        - F: 8
+        Ca: 4
+        F: 8
     lattice: [
          [5.516052, 0.000000, 0.000000],
          [0.000000, 5.516052, 0.000000],
