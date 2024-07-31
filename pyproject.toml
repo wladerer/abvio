@@ -13,3 +13,10 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Chemistry",
     "Topic :: Scientific/Engineering :: Materials Science",
 ]
+
+dependencies = [
+    "numpy<2",
+    "pymatgen",
+    "mp_api",
+    "pydantic",
+]
