@@ -1,6 +1,6 @@
 # Abvio Repository
 
-One of the things that I always bemoan is how bad input files are. But oh my god. I understand now that an input file with consistent and succinct syntax is so incredibly difficult to make. Rigidity and asking the user to learn how to write input files is far better than trying to anticipate all of the possibilities. If you are trying to add flexibility in an input file, it leads to unintended consequences that the user might be unaware of. Additionally, if there is more than one way to do something, then it becomes far too confusing (cough cough QuantumEspresso) 
+One of the things that I have always bemoaned is how bad input files are. But oh my god. I understand now that an input file with consistent and succinct syntax is so incredibly difficult to make. Rigidity and asking the user to learn how to write input files is far better than trying to anticipate all of the possibilities. If you are trying to add flexibility in an input file, it leads to unintended consequences that the user might be unaware of. Additionally, if there is more than one way to do something, then it becomes far too confusing (cough cough QuantumEspresso) 
 
 Conversely, rigidity does not allow for users to solve new problems that the developer hasn't considered before. If an input file does not allow abstraction or flexibility, then the user is confined to the conventions that you have thrust upon them. 
 
