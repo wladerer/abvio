@@ -80,7 +80,11 @@ class Input:
             raise ValueError(f"No kpoints dictionary found in input file: keys passed are {self.input_dict.keys()}")
 
         kpoints_model = kpoints_model_from_dictionary(self.kpoints_dict)
-        kpoints = kpoints_model.kpoints()
+
+        if kpoints_model.requires_structure:
+            kpoints = kpoints_model.kpoints(self.structure)
+        else:
+            kpoints = kpoints_model.kpoints()
         
         return kpoints
 
