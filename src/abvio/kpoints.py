@@ -35,24 +35,17 @@ class BaseKpoints(BaseModel):
             bool: True if the Kpoints mode requires a structure, False otherwise
         """
         return self.mode in {"surface", "autoline"}
-    
+
     @field_validator("mode")
     def check_mode(cls, mode) -> str:
         """Tries to handle different cases of the mode string and returns the correct mode
-        
+
         Args:
             mode (str): The user specified mode of the kpoints
-        
+
         Returns:
             str: The correct mode of the kpoints
         """
-        supported_modes = {
-            "gamma",
-            "monkhorst",
-            "surface",
-            "line",
-            "autoline",
-        }
 
         if mode.lower().startswith("g"):
             return "gamma"
@@ -69,8 +62,6 @@ class BaseKpoints(BaseModel):
             raise ValueError(f"Invalid mode: {mode}")
 
 
-
-
 class GammaKpoints(BaseKpoints):
     """Represents a Gamma centered grid of kpoints
 
@@ -85,7 +76,7 @@ class GammaKpoints(BaseKpoints):
 
     mode: str = "gamma"
     spacing: IntArray3D
-    shift: IntArray3D = [0,0,0]
+    shift: IntArray3D = [0, 0, 0]
 
     def kpoints(self):
         kpoints = Kpoints.gamma_automatic(self.spacing, self.shift)
@@ -107,7 +98,7 @@ class MonkhorstKpoints(BaseKpoints):
 
     mode: str = "monkhorst"
     spacing: IntArray3D
-    shift: IntArray3D = [0,0,0]
+    shift: IntArray3D = [0, 0, 0]
 
     def kpoints(self):
         kpoints = Kpoints.monkhorst_automatic(self.spacing, self.shift)
@@ -178,7 +169,9 @@ class LineKpoints(BaseKpoints):
 
         if spacing < 1:
             log.error(f"Spacing must be a non-negative integer: {spacing}")
-            raise ValueError(f"Spacing must be a non-negative integer (i.e divisions per path): {spacing}")
+            raise ValueError(
+                f"Spacing must be a non-negative integer (i.e divisions per path): {spacing}"
+            )
 
         return spacing
 
@@ -235,7 +228,6 @@ class LineKpoints(BaseKpoints):
 
         return labels
 
-
     def kpoints(self, system: str = "reciprocal"):
         """Generates a line mode Kpoints object
 
@@ -248,14 +240,23 @@ class LineKpoints(BaseKpoints):
 
         if len(self.paths) != len(self.labels):
             log.error(f"Invalid paths and labels: {self.paths}, {self.labels}")
-            raise ValueError(f"Dimensions of labels and paths do not match: {self.paths}, {self.labels}")        
+            raise ValueError(
+                f"Dimensions of labels and paths do not match: {self.paths}, {self.labels}"
+            )
 
-        header = "\n".join(["Line mode KPOINTS file", f"{self.spacing}", "linemode", f"{system}"])
-        path_string = "\n".join([f"{path[0]} {path[1]} {path[2]} {label}" for path, label in zip(self.paths, self.labels)])
+        header = "\n".join(
+            ["Line mode KPOINTS file", f"{self.spacing}", "linemode", f"{system}"]
+        )
+        path_string = "\n".join(
+            [
+                f"{path[0]} {path[1]} {path[2]} {label}"
+                for path, label in zip(self.paths, self.labels)
+            ]
+        )
         kpoints_str = f"{header}\n{path_string}"
 
         log.debug(f"Kpoints string: {kpoints_str}")
-        
+
         kpoints = Kpoints.from_str(kpoints_str)
 
         return kpoints
@@ -281,7 +282,9 @@ class AutoLineKpoints(BaseKpoints):
 
         if spacing < 1:
             log.error(f"Spacing must be a non-negative integer: {spacing}")
-            raise ValueError(f"Spacing must be a non-negative integer (i.e divisions per path): {spacing}")
+            raise ValueError(
+                f"Spacing must be a non-negative integer (i.e divisions per path): {spacing}"
+            )
 
         return spacing
 

@@ -12,7 +12,12 @@ date_format = "%Y-%m-%d"
 logging.basicConfig(level=logging.INFO, format=log_format, datefmt=date_format)
 
 
-def assign_site_property_by_species(structure: Structure, species: str, property_name: str, property_value: float | list[float]) -> Structure:
+def assign_site_property_by_species(
+    structure: Structure,
+    species: str,
+    property_name: str,
+    property_value: float | list[float],
+) -> Structure:
     """
     Assign a property to a species
     Args:
@@ -27,13 +32,18 @@ def assign_site_property_by_species(structure: Structure, species: str, property
 
     sites = structure.sites
     for site in sites:
-
         if site.species_string == species:
             site.properties[property_name] = property_value
 
     return structure
 
-def assign_site_property_by_index(structure: Structure, index: int, property_name: str, property_value: float | list[float]) -> Structure:
+
+def assign_site_property_by_index(
+    structure: Structure,
+    index: int,
+    property_name: str,
+    property_value: float | list[float],
+) -> Structure:
     """
     Assign a property to a site
     Args:
@@ -51,7 +61,13 @@ def assign_site_property_by_index(structure: Structure, index: int, property_nam
 
     return structure
 
-def assign_site_property_by_range(structure: Structure, range: slice, property_name: str, property_value: float | list[float]) -> Structure:
+
+def assign_site_property_by_range(
+    structure: Structure,
+    range: slice,
+    property_name: str,
+    property_value: float | list[float],
+) -> Structure:
     """
     Assign a property to a range of sites
     Args:
@@ -59,7 +75,7 @@ def assign_site_property_by_range(structure: Structure, range: slice, property_n
         range: slice object used to specify range of sites to assign property to
         property_name: name of property to assign
         property_value: value of property to assign
-  
+
     Returns:
         pymatgen Structure object with property assigned
     """
@@ -69,6 +85,7 @@ def assign_site_property_by_range(structure: Structure, range: slice, property_n
         site.properties[property_name] = property_value
 
     return structure
+
 
 def is_range_dict(range_dict: dict) -> bool:
     """
@@ -95,6 +112,7 @@ def is_range_dict(range_dict: dict) -> bool:
         log.error(f"Range dictionary is improperly formatted: {range_dict}")
         return False
 
+
 def is_range_list(range_list: list) -> bool:
     """
     Ranges are often specified as a list of dictionaries
@@ -107,11 +125,14 @@ def is_range_list(range_list: list) -> bool:
         bool indicating if list contains range dictionaries
     """
 
-    if isinstance(range_list, list) and all([is_range_dict(range_dict) for range_dict in range_list]):
+    if isinstance(range_list, list) and all(
+        [is_range_dict(range_dict) for range_dict in range_list]
+    ):
         return True
 
     log.debug(f"Not a range list: {range_list}")
     return False
+
 
 def is_species_dict(species_dict: dict) -> bool:
     """
@@ -133,10 +154,13 @@ def is_species_dict(species_dict: dict) -> bool:
     if not isinstance(species_dict, dict):
         return False
 
-    if all([isinstance(value, (int, float, list)) for value in species_dict.values()]) and all([isinstance(key, str) for key in species_dict.keys()]):
+    if all(
+        [isinstance(value, (int, float, list)) for value in species_dict.values()]
+    ) and all([isinstance(key, str) for key in species_dict.keys()]):
         return True
     else:
         return False
+
 
 def is_index_dict(index_dict: dict) -> bool:
     """
@@ -159,10 +183,13 @@ def is_index_dict(index_dict: dict) -> bool:
     if not isinstance(index_dict, dict):
         return False
 
-    if all([isinstance(value, (int, float, list)) for value in index_dict.values()]) and all([isinstance(key, int) for key in index_dict.keys()]):
+    if all(
+        [isinstance(value, (int, float, list)) for value in index_dict.values()]
+    ) and all([isinstance(key, int) for key in index_dict.keys()]):
         return True
     else:
         return False
+
 
 def is_collinear(magmom_entry: list | dict) -> bool:
     """
@@ -175,9 +202,9 @@ def is_collinear(magmom_entry: list | dict) -> bool:
         ValueError if magmom_entry is improperly formatted
     """
 
-    #checks if magmom_entry is an index, range, or species dictionary
+    # checks if magmom_entry is an index, range, or species dictionary
     if is_index_dict(magmom_entry) or is_species_dict(magmom_entry):
-        #check if values are floats or lists of floats
+        # check if values are floats or lists of floats
         if all([isinstance(value, (float, int)) for value in magmom_entry.values()]):
             return True
         if all([isinstance(value, list) for value in magmom_entry.values()]):
@@ -186,16 +213,24 @@ def is_collinear(magmom_entry: list | dict) -> bool:
             raise ValueError(f"Magnetic moments is improperly formatted {magmom_entry}")
 
     if is_range_list(magmom_entry):
-        #select the "value" key of each entry in the list and check if it is a float or list of floats
-        if all([isinstance(range_dict["value"], (float, int)) for range_dict in magmom_entry]):
+        # select the "value" key of each entry in the list and check if it is a float or list of floats
+        if all(
+            [
+                isinstance(range_dict["value"], (float, int))
+                for range_dict in magmom_entry
+            ]
+        ):
             return True
         if all([isinstance(range_dict["value"], list) for range_dict in magmom_entry]):
             return False
         else:
-            raise ValueError(f"Magnetic moments is improperly formatted: {magmom_entry}")
+            raise ValueError(
+                f"Magnetic moments is improperly formatted: {magmom_entry}"
+            )
 
     else:
         raise ValueError(f"Magnetic moments is improperly formatted: {magmom_entry}")
+
 
 def is_valid_magmom_entry(magmom_entry: list | dict) -> bool:
     """
@@ -206,14 +241,20 @@ def is_valid_magmom_entry(magmom_entry: list | dict) -> bool:
         bool indicating if magmom_entry is a valid magmom entry
     """
 
-    #checks if magmom_entry is an index, range, or species dictionary
-    if is_index_dict(magmom_entry) or is_species_dict(magmom_entry) or is_range_list(magmom_entry):
+    # checks if magmom_entry is an index, range, or species dictionary
+    if (
+        is_index_dict(magmom_entry)
+        or is_species_dict(magmom_entry)
+        or is_range_list(magmom_entry)
+    ):
         return True
     else:
         return False
 
 
-def site_properties_from_structure(structure: Structure, property_name: str, default = None) -> list:
+def site_properties_from_structure(
+    structure: Structure, property_name: str, default=None
+) -> list:
     """
     Get a property from a structure
     Args:
@@ -229,7 +270,10 @@ def site_properties_from_structure(structure: Structure, property_name: str, def
 
     return properties
 
-def format_magnetic_moments(magmom_entry: list | dict, structure: Structure, missing: float | list = 0) -> list:
+
+def format_magnetic_moments(
+    magmom_entry: list | dict, structure: Structure, missing: float | list = 0
+) -> list:
     """
     Format magnetic moments to be compatible with pymatgen Incar object
     Args:
@@ -242,11 +286,15 @@ def format_magnetic_moments(magmom_entry: list | dict, structure: Structure, mis
 
     if is_index_dict(magmom_entry):
         for index, magmom in magmom_entry.items():
-            structure = assign_site_property_by_index(structure, index, "magmom", magmom)
+            structure = assign_site_property_by_index(
+                structure, index, "magmom", magmom
+            )
 
     if is_species_dict(magmom_entry):
         for species, magmom in magmom_entry.items():
-            structure = assign_site_property_by_species(structure, species, "magmom", magmom)
+            structure = assign_site_property_by_species(
+                structure, species, "magmom", magmom
+            )
 
     if is_range_list(magmom_entry):
         for range_dict in magmom_entry:
@@ -254,14 +302,18 @@ def format_magnetic_moments(magmom_entry: list | dict, structure: Structure, mis
             stop = range_dict["stop"]
             step = range_dict.get("step")
             value = range_dict["value"]
-            structure = assign_site_property_by_range(structure, slice(start, stop, step), "magmom", value)
+            structure = assign_site_property_by_range(
+                structure, slice(start, stop, step), "magmom", value
+            )
 
     magmoms = site_properties_from_structure(structure, "magmom", missing)
 
     return magmoms
-    
 
-def format_incar_dict(incar_dict: dict, structure: Structure, missing: float |list = 0) -> dict:
+
+def format_incar_dict(
+    incar_dict: dict, structure: Structure, missing: float | list = 0
+) -> dict:
     """Takes incar dict and formats it to be compatible with pymatgen Incar object
 
     Currently only supports magmom entries
@@ -273,22 +325,22 @@ def format_incar_dict(incar_dict: dict, structure: Structure, missing: float |li
     """
     formatted_incar_dict = incar_dict.copy()
 
-
     if formatted_incar_dict.get("magmom"):
-
         magmom_entry = formatted_incar_dict.pop("magmom")
         magmoms = format_magnetic_moments(magmom_entry, structure, missing)
         formatted_incar_dict["magmom"] = magmoms
 
-    #set all keys to uppercase
-    formatted_incar_dict = {key.upper(): value for key, value in formatted_incar_dict.items()}
-    
+    # set all keys to uppercase
+    formatted_incar_dict = {
+        key.upper(): value for key, value in formatted_incar_dict.items()
+    }
+
     return formatted_incar_dict
 
 
 class IncarModel(BaseModel):
     """Pydantic model used to help validate the incar dictionary format
-    
+
     1. checks if incar is a dictionary
     2. checks if all key value pairs are valid
     3. uses pymatgen to validate the incar dictionary
@@ -296,17 +348,17 @@ class IncarModel(BaseModel):
 
     incar_dict: dict
 
-    @field_validator('incar_dict')
+    @field_validator("incar_dict")
     def validate_incar_dict(cls, incar_dict: dict):
         """Validates the incar dictionary
-        
+
         Args:
             incar_dict (dict): The incar dictionary
-        
+
         Raises:
             ValueError: If the incar dictionary is invalid
         """
-        
+
         if not isinstance(incar_dict, dict):
             raise ValueError("incar_dict must be a dictionary")
 
@@ -320,24 +372,14 @@ class IncarModel(BaseModel):
 
         return incar_dict
 
-
     def incar(self, structure: Structure) -> Incar:
         """Returns the pymatgen Incar object
-        
+
         Returns:
             Incar: The pymatgen Incar object
         """
-        
+
         formatted_incar_dictionary = format_incar_dict(self.incar_dict, structure)
         incar = Incar(formatted_incar_dictionary)
 
         return incar
-        
-
-
-
-
-
-
-
-    

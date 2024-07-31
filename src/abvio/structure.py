@@ -64,7 +64,7 @@ def is_valid_poscar_string(poscar_string: str) -> bool:
 def format_species(species: list[dict] | list[str]) -> list[str]:
     """Formats the species list
 
-    Species list can either be 
+    Species list can either be
     - A list of dictionaries where each dictionary contains the species and count
     - A list of strings where each string is the species
 
@@ -81,35 +81,37 @@ def format_species(species: list[dict] | list[str]) -> list[str]:
     if not isinstance(species, list):
         log.error(f"Species is of type: {type(species)}")
         raise ValueError("Species must be a list")
-    
+
     if isinstance(species[0], dict):
-        #check if keys are strings and values are integers
+        # check if keys are strings and values are integers
         for species_dict in species:
             if not all(isinstance(key, str) for key in species_dict.keys()):
-                log.error(f"Keys in species dictionary are not strings: {species_dict.keys()}")
+                log.error(
+                    f"Keys in species dictionary are not strings: {species_dict.keys()}"
+                )
                 raise ValueError("Keys in species dictionary must be strings")
-            
+
             if not all(isinstance(value, int) for value in species_dict.values()):
-                log.error(f"Values in species dictionary are not integers: {species_dict.values()}")
+                log.error(
+                    f"Values in species dictionary are not integers: {species_dict.values()}"
+                )
                 raise ValueError("Values in species dictionary must be integers")
 
-
     if isinstance(species[0], dict):
-
         formatted_species_list = []
         for species_dict in species:
             species_str, species_count = next(iter(species_dict.items()))
             formatted_species_list.extend([species_str] * species_count)
-        
+
         return formatted_species_list
 
     if isinstance(species, list) and isinstance(species[0], str):
         return species
 
-
     else:
         log.error(f"Species is of type: {type(species)}")
         raise ValueError("Species must be a list of dictionaries or a list of strings")
+
 
 def structure_from_mpi_code(mpcode: str, is_conventional: bool = True):
     """
@@ -118,17 +120,18 @@ def structure_from_mpi_code(mpcode: str, is_conventional: bool = True):
     from mp_api.client import MPRester
 
     api_key = os.getenv("MP_API_KEY")
- 
+
     with MPRester(api_key, mute_progress_bars=True) as mpr:
         log.debug("Connected to materials project API")
         structure = mpr.get_structure_by_material_id(
             mpcode, conventional_unit_cell=is_conventional
         )
-    
+
     if structure is None:
         raise ValueError(f"Could not find structure with code {mpcode}")
 
     return structure
+
 
 def structure_from_lattice(
     lattice: Lattice | ArrayLike,
@@ -172,7 +175,12 @@ def structure_from_prototype(
 ) -> Structure:
     """Create a structure from a prototype, lattice object, species list, and coordinates array"""
 
-    log_dict = {"Prototype": prototype, "Species": species, "Lattice": lattice, "Cartesian": cartesian}
+    log_dict = {
+        "Prototype": prototype,
+        "Species": species,
+        "Lattice": lattice,
+        "Cartesian": cartesian,
+    }
 
     log.debug(f"Creating structure from prototype: {log_dict}")
 
@@ -183,15 +191,16 @@ def structure_from_prototype(
 
     return structure
 
+
 def structure_from_file(file: Path | str) -> Structure:
     """Creates a pymatgen Structure object from a file containing structure information
-    
+
     Args:
 
         file (Path | str): The path to the file containing the structure information
 
     Returns:
-    
+
             Structure: The pymatgen Structure object created from the file
     """
 
@@ -199,21 +208,23 @@ def structure_from_file(file: Path | str) -> Structure:
 
     return Structure.from_file(file)
 
+
 def structure_from_string(string: str) -> Structure:
     """Creates a pymatgen Structure object from a string containing structure information
-    
+
     Args:
 
         string (str): The string containing the structure information
 
     Returns:
-    
+
             Structure: The pymatgen Structure object created from the string
     """
 
     log.debug(f"Creating structure from string: {string}")
 
     return Poscar.from_str(string).structure
+
 
 class BaseStructure(BaseModel):
     mode: str
@@ -309,7 +320,9 @@ class PrototypeStructure(BaseStructure):
     def structure(self) -> Structure:
         """Creates a pymatgen Structure object from the input data"""
 
-        return structure_from_prototype(prototype=self.prototype, species=self.species, lattice=self.lattice)
+        return structure_from_prototype(
+            prototype=self.prototype, species=self.species, lattice=self.lattice
+        )
 
 
 class ExternalStructure(BaseStructure):
@@ -320,7 +333,7 @@ class ExternalStructure(BaseStructure):
 
     mode: str = "external"
     file: Path | str = None
-    string: str = None 
+    string: str = None
     code: str = None
 
     @model_validator(mode="before")
@@ -355,9 +368,10 @@ class ExternalStructure(BaseStructure):
     def structure(self) -> Structure:
         """Checks to see if file, string, or code is provided and returns a pymatgen Structure object"""
 
-
         if self.file and self.string and self.code:
-            log.debug(f"was given file: {self.file}, string: {self.string}, and code: {self.code}")
+            log.debug(
+                f"was given file: {self.file}, string: {self.string}, and code: {self.code}"
+            )
             raise ValueError("Must provide only one of file, string, or code")
 
         elif self.file:
@@ -365,7 +379,7 @@ class ExternalStructure(BaseStructure):
 
         elif self.string:
             struct = structure_from_string(self.string)
-        
+
         elif self.code:
             struct = structure_from_mpi_code(self.code)
 
@@ -374,16 +388,16 @@ class ExternalStructure(BaseStructure):
 
         return struct
 
-  
+
 def structure_model_from_input_dict(structure_dictionary: dict) -> Structure:
     """Creates a pymatgen Structure object from a dictionary containing input structure information
-    
+
     Args:
 
         structure_dict (dict): The dictionary containing the structure information
 
     Returns:
-    
+
             Structure: The pymatgen Structure object created from the dictionary
     """
 
@@ -401,13 +415,3 @@ def structure_model_from_input_dict(structure_dictionary: dict) -> Structure:
     StructureModel = BaseStructureModel.validate(structure_dictionary)
 
     return StructureModel
-
-
-
-    
-
-
-
-
-
-

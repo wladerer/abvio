@@ -4,7 +4,6 @@ import yaml
 import os
 
 from pathlib import Path
-from pydantic import BaseModel, field_validator
 
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Incar, Kpoints, Poscar
@@ -18,7 +17,6 @@ log_format = "%(asctime)s - %(levelname)s - %(message)s"
 date_format = "%Y-%m-%d"
 
 logging.basicConfig(level=logging.INFO, format=log_format, datefmt=date_format)
-
 
 
 def load(filepath: Path | str) -> dict:
@@ -44,7 +42,6 @@ def load(filepath: Path | str) -> dict:
 
 
 class Input:
-
     def __init__(self, input_dictionary: dict):
         self.input_dict = input_dictionary
         self.structure_dict = input_dictionary.get("structure")
@@ -53,9 +50,10 @@ class Input:
 
     @property
     def structure(self) -> Structure:
-        
         if self.structure_dict is None:
-            raise ValueError(f"No structure dictionary found in input file: keys passed are {self.input_dict.keys()}")
+            raise ValueError(
+                f"No structure dictionary found in input file: keys passed are {self.input_dict.keys()}"
+            )
 
         structure_model = structure_model_from_input_dict(self.structure_dict)
         structure = structure_model.structure
@@ -64,10 +62,11 @@ class Input:
 
     @property
     def incar(self) -> Incar:
-
         if self.incar_dict is None:
-            raise ValueError(f"No incar dictionary found in input file: keys passed are {self.input_dict.keys()}")
-        
+            raise ValueError(
+                f"No incar dictionary found in input file: keys passed are {self.input_dict.keys()}"
+            )
+
         incar_model = IncarModel(incar_dict=self.incar_dict)
         incar = incar_model.incar(self.structure)
 
@@ -75,9 +74,10 @@ class Input:
 
     @property
     def kpoints(self) -> Kpoints:
-
         if self.kpoints_dict is None:
-            raise ValueError(f"No kpoints dictionary found in input file: keys passed are {self.input_dict.keys()}")
+            raise ValueError(
+                f"No kpoints dictionary found in input file: keys passed are {self.input_dict.keys()}"
+            )
 
         kpoints_model = kpoints_model_from_dictionary(self.kpoints_dict)
 
@@ -85,7 +85,7 @@ class Input:
             kpoints = kpoints_model.kpoints(self.structure)
         else:
             kpoints = kpoints_model.kpoints()
-        
+
         return kpoints
 
     @classmethod
@@ -109,7 +109,7 @@ class Input:
             directory: The directory to write the input files to
         """
 
-        #write only the files associated with non-None dictionaries
+        # write only the files associated with non-None dictionaries
         if self.structure_dict is not None:
             poscar = Poscar(self.structure)
             poscar.write_file(os.path.join(directory, "POSCAR"))
@@ -118,14 +118,12 @@ class Input:
             incar = self.incar
 
             if incar.check_params():
-                warnings.warn("INCAR file contains unrecognized tags or values", UserWarning)
+                warnings.warn(
+                    "INCAR file contains unrecognized tags or values", UserWarning
+                )
 
             incar.write_file(os.path.join(directory, "INCAR"))
 
         if self.kpoints_dict is not None:
             kpoints = self.kpoints
             kpoints.write_file(os.path.join(directory, "KPOINTS"))
-
-
-
-
