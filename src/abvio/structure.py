@@ -247,13 +247,21 @@ class ManualStructure(BaseStructure):
     """
 
     mode: str = "manual"
-    lattice: Lattice | ArrayLike
+    lattice: Lattice | ArrayLike | dict
     coords: ArrayLike
     species: list[str] | list[dict[str, int]]
 
     @field_validator("species")
     def validate_species(cls, species):
         return format_species(species)
+
+    @field_validator("lattice")
+    def validate_lattice(cls, lattice):
+        if isinstance(lattice, list) or isinstance(lattice, np.ndarray):
+            lattice = Lattice(lattice)
+        elif isinstance(lattice, dict):
+            lattice = Lattice.from_dict(lattice)
+        return lattice
 
     @property
     def structure(self) -> Structure:

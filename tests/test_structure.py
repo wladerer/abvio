@@ -142,6 +142,16 @@ class TestManualStructure(unittest.TestCase):
 
             st.ManualStructure(lattice=lattice, species=species, coords=coords).structure
 
+    def test_manual_structure_from_file(self):
+            
+            filepath = os.path.join(files_dir, 'lattice_list.yaml')
+            input_dict = io.load(filepath)['structure']
+
+            model = st.ManualStructure.validate(input_dict)
+            structure = model.structure
+
+            self.assertIsInstance(structure, Structure)
+
 
 class TestPrototypeStructure(unittest.TestCase):
 
