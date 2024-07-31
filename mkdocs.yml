@@ -45,12 +45,6 @@ nav:
 - Documentation:
   - Quickstart: quickstart.md
   - File Format: format.md
-- API Reference:
-  - io: api/io.md
-  - structure: api/structure.md
-  - incar.md: api/incar.md
-  - kpoints.md: api/kpoints.md
-  - cli: api/cli.md
 
 
 markdown_extensions:
