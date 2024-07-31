@@ -43,13 +43,14 @@ nav:
 - About: index.md
 - Blog: https://wladerer.github.io
 - Documentation:
-  - Incar Format: incar.md
-  - Kpoints Format: kpoints.md
-  - Poscar Format: poscar.md
-  - Potcar Format: potcar.md
-  - Commands: cli.md
-- Examples:
-  - Magnetic Ordering: examples/magnetism.md
+  - Quickstart: quickstart.md
+  - File Format: format.md
+- API Reference:
+  - io: api/io.md
+  - structure: api/structure.md
+  - incar.md: api/incar.md
+  - kpoints.md: api/kpoints.md
+  - cli: api/cli.md
 
 
 markdown_extensions:
