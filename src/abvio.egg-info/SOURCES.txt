@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/abvio/__init__.py
+src/abvio/cli.py
 src/abvio/incar.py
 src/abvio/io.py
 src/abvio/kpoints.py
@@ -8,6 +9,7 @@ src/abvio/structure.py
 src/abvio.egg-info/PKG-INFO
 src/abvio.egg-info/SOURCES.txt
 src/abvio.egg-info/dependency_links.txt
+src/abvio.egg-info/entry_points.txt
 src/abvio.egg-info/requires.txt
 src/abvio.egg-info/top_level.txt
 tests/test_incar.py

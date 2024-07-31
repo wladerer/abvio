@@ -2,16 +2,19 @@ import unittest
 import yaml
 import os
 import abvio.io as io
+import numpy as np
 
 from pathlib import Path
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Incar, Kpoints, Poscar
 
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+
 
 base_path = Path(__file__).parent
 structure_dir = os.path.join(base_path, 'structures')
 files_dir = os.path.join(base_path, 'files')
-vaspset_dir = os.path.join(base_path, 'vaspset')
+vaspset_dir = os.path.join(base_path, 'vaspsets')
 
 
 
@@ -106,6 +109,85 @@ class TestCreateInput(unittest.TestCase):
         os.remove('/tmp/POSCAR')
         os.remove('/tmp/INCAR')
         os.remove('/tmp/KPOINTS')
+
+
+class TestSiBandStructure(unittest.TestCase):
+    """Tests if the Si band structure is generated correctly"""
+
+    def test_incar(self):
+        """Tests if the INCAR file is generated correctly"""
+
+        si_band_dir = os.path.join(vaspset_dir, 'band')
+        input_file = os.path.join(si_band_dir, 'equivalent.yaml')
+        InputObject = io.Input.from_file(input_file)
+        
+        expected_incar = Incar.from_file(os.path.join(si_band_dir, 'INCAR'))
+
+        self.assertEqual(InputObject.incar, expected_incar)
+
+    def test_kpoints(self):
+        """Tests if the KPOINTS file is generated correctly"""
+
+        si_band_dir = os.path.join(vaspset_dir, 'band')
+        input_file = os.path.join(si_band_dir, 'equivalent.yaml')
+        InputObject = io.Input.from_file(input_file)
+        
+        expected_kpoints = Kpoints.from_file(os.path.join(si_band_dir, 'KPOINTS'))
+
+        self.assertEqual(set(InputObject.kpoints.kpts), set(expected_kpoints.kpts))
+
+    def test_structure(self):
+        """Tests if the structure is generated correctly"""
+
+        si_band_dir = os.path.join(vaspset_dir, 'band')
+        input_file = os.path.join(si_band_dir, 'equivalent.yaml')
+        InputObject = io.Input.from_file(input_file)
+        
+        expected_structure = Poscar.from_file(os.path.join(si_band_dir, 'POSCAR')).structure
+
+        self.assertEqual(InputObject.structure.reduced_formula, expected_structure.reduced_formula)
+
+    
+class TestPerovskiteSet(unittest.TestCase):
+    """Tests if the Perovskite set is generated correctly"""
+
+    def test_incar(self):
+        """Tests if the INCAR file is generated correctly"""
+
+        perovskite_dir = os.path.join(vaspset_dir, 'perovskite')
+        input_file = os.path.join(perovskite_dir, 'equivalent.yaml')
+        InputObject = io.Input.from_file(input_file)
+        
+        expected_incar = Incar.from_file(os.path.join(perovskite_dir, 'INCAR'))
+
+        #check only magmom, lwave, and encut
+        self.assertEqual(InputObject.incar['MAGMOM'], expected_incar['MAGMOM'])
+        self.assertEqual(InputObject.incar['LWAVE'], expected_incar['LWAVE'])
+        self.assertEqual(InputObject.incar['ENCUT'], expected_incar['ENCUT'])
+
+    def test_kpoints(self):
+        """Tests if the KPOINTS file is generated correctly"""
+
+        perovskite_dir = os.path.join(vaspset_dir, 'perovskite')
+        input_file = os.path.join(perovskite_dir, 'equivalent.yaml')
+        InputObject = io.Input.from_file(input_file)
+        
+        expected_kpoints = Kpoints.from_file(os.path.join(perovskite_dir, 'KPOINTS'))
+
+        self.assertEqual(set(InputObject.kpoints.kpts), set(expected_kpoints.kpts))
+
+    def test_structure(self):
+        """Tests if the structure is generated correctly"""
+
+        perovskite_dir = os.path.join(vaspset_dir, 'perovskite')
+        input_file = os.path.join(perovskite_dir, 'equivalent.yaml')
+        InputObject = io.Input.from_file(input_file)
+        
+        expected_structure = Poscar.from_file(os.path.join(perovskite_dir, 'POSCAR')).structure
+
+        self.assertEqual(InputObject.structure.reduced_formula, expected_structure.reduced_formula)
+        
+
 
 
 if __name__ == '__main__':

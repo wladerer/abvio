@@ -1,0 +1,23 @@
+incar:
+  ediff: 1e-6
+  ediffg: -0.01
+  encut: 600
+  nsw: 25
+  ibrion: 2
+  isif: 3
+  nelm: 100 
+  magmom: 
+      Ca: 0.0
+      Ti: 2.0
+      O: 0.0
+  lwave: false
+structure:
+  mode: prototype
+  prototype: perovskite
+  species: [Ca, Ti, O]
+  lattice:
+    a: 3.889471
+kpoints:
+  mode: gamma
+  spacing: [7, 7, 7]
+  

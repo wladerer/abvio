@@ -1,0 +1,4 @@
+ICHARG = 11 
+ISMEAR = 0 
+SIGMA = 0.1
+LORBIT = 11

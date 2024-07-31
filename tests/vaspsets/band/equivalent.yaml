@@ -1,0 +1,23 @@
+incar:
+  icharg: 11 
+  ismear: 0 
+  sigma: 0.1
+  lorbit: 11
+structure:
+  mode: prototype
+  prototype: diamond
+  species: [Si]
+  lattice:
+    a: 5.43
+kpoints:
+  mode: line
+  spacing: 10
+  labels: [L, G, X, U, K, G]
+  paths:
+    - [0.50000, 0.50000, 0.50000]
+    - [0.00000, 0.00000, 0.00000]
+    - [0.00000, 0.50000, 0.50000]
+    - [0.25000, 0.62500, 0.62500]
+    - [0.37500, 0.7500, 0.37500]
+    - [0.00000, 0.00000, 0.00000]
+  
