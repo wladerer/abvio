@@ -1,6 +1,6 @@
 site_name: abvio
+site_url: https://wladerer.github.io/abvio/
 site_description: A better VASP input file
-strict: true
 
 theme:
   name: 'material'
