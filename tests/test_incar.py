@@ -33,14 +33,13 @@ class TestMagmom(unittest.TestCase):
 
     def test_assign_magnetic_moments_by_species_fluorite(self):
         structure = fluorite_structure.copy()
-        structure = In.assign_site_property_by_species(structure, 'F', 'magmom', 0.0)
+        structure = In.assign_site_property_by_species(structure, 'F', 'magmom', 1.0)
         structure = In.assign_site_property_by_species(structure, 'Ca', 'magmom', 2.0)
-
         for site in structure.sites:
             if site.species_string == 'Ca':
                 self.assertEqual(site.properties['magmom'], 2.0)
             else:
-                self.assertEqual(site.properties['magmom'], 0.0)
+                self.assertEqual(site.properties['magmom'], 1.0)
         
     def test_assign_magnetic_moments_by_index(self):
         structure = perovskite_structure.copy()
@@ -112,7 +111,7 @@ class TestNoncollinearMagMom(unittest.TestCase):
         structure = In.assign_site_property_by_species(structure, 'Ca', 'magmom', [2.0, 0, -1])
 
         magmoms = In.site_properties_from_structure(structure, 'magmom', default=[0, 0, 0])
-
+        print(structure)
         self.assertEqual(magmoms, [[2.0, 0, -1]] * 4 + [[0, 0, 0]] * 8)
 
 
