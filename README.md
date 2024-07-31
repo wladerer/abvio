@@ -139,3 +139,23 @@ ___
 Input files, much like young grad students, need validation. In fact, I don't quite understand why some ab initio suites don't do some form of sanity check and just lets the calculations crash. Once again, yes due diligence of the user is paramount. But hey, sometimes people make mistakes. 
 
 So, I have attempted to bake sanity checks, input validation, and some wisdom into the processing of the input file. If you end up using this code, many warnings (and possibly errors) will be brought to the users attention even before the calculation has started. This might prevent a millisecond long disaster on week-long slurm queues. 
+
+___
+
+If you want to try it out, feel free to take any of the above files and test them using the command line interface by running
+
+```
+abvio input.yaml -o /tmp
+```
+
+Which will write INCAR, KPOINTS, and POSCAR to the root tmp directory (just make sure you change the file name in the command to match your file name). 
+
+You can also preview what the output should look like using 
+
+```
+abvio input.yaml --preview
+```
+
+Which will give an output like this
+
+![cli preview](/docs/images/preview.png)
