@@ -24,3 +24,11 @@ dependencies = [
 
 [project.scripts]
 abvio = "abvio.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+Documentation = "https://wladerer.github.io/abvio/"
+Issues = "https://github.com/wladerer/abvio/issues"
