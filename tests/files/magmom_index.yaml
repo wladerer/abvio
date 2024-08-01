@@ -32,5 +32,5 @@ incar:
         2: 2.0
         4: 0.6
 kpoints:
-    kpoints: [4, 4, 4]
-    style: gamma
+    spacing: [4, 4, 4]
+    mode: gamma

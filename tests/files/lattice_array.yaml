@@ -26,7 +26,5 @@ incar:
     ediff: 1e-6
     ediffg: -0.01
 kpoints:
-    kpts: [4, 4, 4]
-    kpts_shift: [0.5, 0.5, 0.5]
-    kpts_type: tpiba
-    kpts_weights: [1.0]
+  mode: autoline
+  spacing: 65
