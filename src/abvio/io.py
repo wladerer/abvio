@@ -238,7 +238,7 @@ class Input:
 
         return cls(input_dict)
 
-    def write_file(self, directory: Path | str):
+    def write_file(self, filename: Path | str):
         """Writes the input dictionary to a file
 
         Args:
@@ -256,6 +256,5 @@ class Input:
             "kpoints": kpoints_dict
         }
 
-        filename = os.path.join(directory, "abvio.yaml")
         with open(filename, "w") as f:
             yaml.dump(output_dict, f, default_flow_style=None)

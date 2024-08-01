@@ -1,15 +1,17 @@
 import argparse
 import sys
 import yaml
+import logging
+import os
+
+from pathlib import Path
+from pydantic import ValidationError
+from abvio.io import Input
 from rich.console import Console
 from rich.table import Table
 
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-
-
-from pydantic import ValidationError
-from abvio.io import Input
-
+#set logging level to silent
+logging.basicConfig(level=logging.ERROR)
 
 def check_input_file(input_file):
     try:
@@ -46,48 +48,39 @@ def preview(input_file):
     incar = input_object.incar
     kpoints = input_object.kpoints
 
-    # get space group symbol and number for Notes section
-    sga = SpacegroupAnalyzer(structure)
-    space_group = sga.get_space_group_symbol()
-    space_group_number = sga.get_space_group_number()
-
-    notes = (
-        f"Space group symbol: {space_group}\nSpace group number ({space_group_number})"
-    )
-
     table.add_column("Structure")
     table.add_column("INCAR")
     table.add_column("KPOINTS")
-    table.add_column("Notes")
-    table.add_row(f"{structure}", f"{incar}", f"{kpoints}", f"{notes}")
+    table.add_row(f"{structure}", f"{incar}", f"{kpoints}") 
 
     return table
 
 
+
 def main():
     """
-    Create a VASP input set from a yaml file.
+    Create a VASP input set from a YAML file.
 
-    This function parses command line arguments, reads an abvio yaml file, and generates VASP input files based on the
+    This function parses command line arguments, reads an abvio YAML file, and generates VASP input files based on the
     provided input. It also performs optional checks on the input file for validity.
 
     Command line arguments:
-        input (str): The path to the abvio yaml file or directory.
-        -o, --output (str): The path to the output directory.
+        input (str | Path): The path to the abvio YAML file or directory.
+        -o, --output (str): The path to the output directory or file.
         --check: Perform validity checks on the input file.
         --preview: Preview the input files.
         --convert: Convert VASP input files to abvio format.
-
+        --verbose: Increase output verbosity.
     """
     parser = argparse.ArgumentParser(
-        description="Create a VASP input set from a yaml file"
+        description="Create a VASP input set from a YAML file"
     )
-    parser.add_argument("input", type=str, help="The path to the abvio yaml file")
+    parser.add_argument("input", type=str, help="The path to the abvio YAML file or directory")
     parser.add_argument(
-        "-o", "--output", type=str, help="The path to the output directory"
+        "-o", "--output", type=str, help="The path to the output directory or file"
     )
     parser.add_argument(
-        "--check", action="store_true", help="Check validity of input file"
+        "--check", action="store_true", help="Check validity of the input file"
     )
     parser.add_argument(
         "--preview", action="store_true", help="Preview the input files"
@@ -95,26 +88,34 @@ def main():
     parser.add_argument(
         "--convert", action="store_true", help="Convert VASP input files to abvio format"
     )
+    parser.add_argument(
+        "--verbose", action="store_true", help="Increase output verbosity"
+    )
     args = parser.parse_args()
 
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+
     user_input = args.input
-    output_directory = args.output
+    output_path = args.output
 
     if args.check:
         check_input_file(user_input)
 
     if args.preview:
-        Console().print(preview(user_input))
+        Console().print(preview(user_input), markup=False)
 
     if args.output and not args.convert:
+        if not os.path.exists(output_path):
+            logging.error(f"Output path '{output_path}' does not exist.")
+            sys.exit(1)
         input_object = Input.from_file(user_input)
-        input_object.write_inputs(output_directory)
+        input_object.write_inputs(output_path)
 
     if args.convert:
 
-       input_object = Input.from_vaspset(user_input)
-       input_object.write_file(output_directory)
-
+        input_object = Input.from_vaspset(user_input)
+        input_object.write_file(output_path)
 
 
 
