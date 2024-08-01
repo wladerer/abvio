@@ -1,5 +1,5 @@
 site_name: abvio
-site_url: https://wladerer.github.io/
+site_url: https://wladerer.github.io/quickstart
 site_description: A better VASP input file
 
 theme:

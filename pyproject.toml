@@ -29,5 +29,5 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project.urls]
-Documentation = "https://wladerer.github.io/abvio/"
+Documentation = "https://wladerer.github.io/abvio/quickstart"
 Issues = "https://github.com/wladerer/abvio/issues"
