@@ -1,11 +1,9 @@
 # Installation
 
-abvio is currently not available on PyPI or conda-forge, but you can clone the repository and install it yourself 
+abvio is currently only available on PyPI, but you can clone the repository and install it yourself 
 
 ```
-git clone https://github.com/wladerer/abvio.git
-cd abvio
-pip install -e .
+pip install abvio
 ```
 
 
