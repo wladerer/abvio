@@ -2,3 +2,4 @@ numpy<2
 pymatgen
 mp_api
 pydantic
+rich

@@ -19,6 +19,7 @@ dependencies = [
     "pymatgen",
     "mp_api",
     "pydantic",
+    "rich",
 ]
 
 [project.scripts]
