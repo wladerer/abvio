@@ -72,12 +72,12 @@ def main():
     provided input. It also performs optional checks on the input file for validity.
 
     Command line arguments:
-        -i, --input (str): The path to the abvio yaml file.
+        input (str): The path to the abvio yaml file or directory.
         -o, --output (str): The path to the output directory.
         --check: Perform validity checks on the input file.
+        --preview: Preview the input files.
+        --convert: Convert VASP input files to abvio format.
 
-    Returns:
-        None
     """
     parser = argparse.ArgumentParser(
         description="Create a VASP input set from a yaml file"
@@ -92,20 +92,30 @@ def main():
     parser.add_argument(
         "--preview", action="store_true", help="Preview the input files"
     )
+    parser.add_argument(
+        "--convert", action="store_true", help="Convert VASP input files to abvio format"
+    )
     args = parser.parse_args()
 
-    input_file = args.input
+    user_input = args.input
     output_directory = args.output
 
     if args.check:
-        check_input_file(input_file)
+        check_input_file(user_input)
 
     if args.preview:
-        Console().print(preview(input_file))
+        Console().print(preview(user_input))
 
-    if args.output:
-        input_object = Input.from_file(input_file)
+    if args.output and not args.convert:
+        input_object = Input.from_file(user_input)
         input_object.write_inputs(output_directory)
+
+    if args.convert:
+
+       input_object = Input.from_vaspset(user_input)
+       input_object.write_file(output_directory)
+
+
 
 
 if __name__ == "__main__":

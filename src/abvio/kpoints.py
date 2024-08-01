@@ -23,7 +23,7 @@ class BaseKpoints(BaseModel):
     """Represents a base class for Kpoints"""
 
     mode: str
-    spacing: int | float | IntArray3D
+    spacing: int | float | list
 
     @property
     def requires_structure(self) -> bool:

@@ -1,0 +1,18 @@
+structure:
+  mode: external
+  code: mp-24058
+kpoints:
+  mode: gamma
+  spacing: [3, 3, 3]
+incar:
+  ediff: 0.00001
+  ediffg: -0.01
+  lwave: false
+  magmom:
+    H: 0
+    B: 0
+    O: 0
+    F: 0
+    Ag: 7
+
+
