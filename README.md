@@ -37,8 +37,8 @@ The following is an example of what a spin-orbit coupled band structure calculat
 structure:
     mode: manual
     species: 
-        - Ca: 4
-        - F: 8
+        Ca: 4
+        F: 8
     lattice:
         a: 5.516052
         b: 5.516052
