@@ -41,41 +41,41 @@ To our benefit, and our detriment, there is some flexibility in the way we can r
 
 There are only a few "rules" when it comes to abvio. 
 
-#### structure, incar, and kpoints must be in the highest scope of the file
+### structure, incar, and kpoints must be in the highest scope of the file
 
 Unfortunately, the difference is hard to see, but "scope" or hierarchy is distinguished by indentation. The following is a valid abvio yaml file
 
-> Good: 
->```yaml
-> structure:
->    ...
-> kpoints:
->    spacing: 800
->    mode: spacing
-> incar:
->   ...
-> ```
+ Good: 
+```yaml
+ structure:
+    ...
+ kpoints:
+    spacing: 800
+    mode: spacing
+ incar:
+   ...
+ ```
 
 Where this one is not
 
-> Bad: 
->```yaml
-> structure:
->    ...
->   kpoints:
->       spacing: 800
->       mode: spacing
-> incar:
->   ...
-> ```
+ Bad: 
+```yaml
+ structure:
+    ...
+   kpoints:
+       spacing: 800
+       mode: spacing
+ incar:
+   ...
+ ```
 
 Thankfully, abvio will let you know it is missing "kpoints" when you try to write the VASP input files.
 
-#### structure and kpoints must always have a mode tag
+### structure and kpoints must always have a mode tag
 
 abvio requires a "mode" tag to handle the many options of creating structures and kpoint meshes. You can find all of these features listed further down in the documentation. 
 
-#### ranges requires a start, stop, and value
+### ranges requires a start, stop, and value
 
 when assigning site properties like `MAGMOM` and `LDAUU`, there is a 'range' option. This is detected automatically (therefore no need to add `mode`), but will need to explicitly state the start, stop, and value of the site property in the following way
 
