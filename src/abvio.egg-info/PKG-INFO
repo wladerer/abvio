@@ -3,12 +3,15 @@ Name: abvio
 Version: 0.0.1
 Summary: A Python package to simplify VASP input files
 Author-email: William Laderer <wtladerer@gmail.com>
+Project-URL: Documentation, https://wladerer.github.io/abvio/
+Project-URL: Issues, https://github.com/wladerer/abvio/issues
 Classifier: Intended Audience :: Science/Research
 Classifier: Programming Language :: Python :: 3
 Classifier: Topic :: Scientific/Engineering :: Physics
 Classifier: Topic :: Scientific/Engineering :: Chemistry
 Classifier: Topic :: Scientific/Engineering :: Materials Science
 Description-Content-Type: text/markdown
+License-File: LICENSE
 Requires-Dist: numpy<2
 Requires-Dist: pymatgen
 Requires-Dist: mp_api
@@ -54,8 +57,8 @@ The following is an example of what a spin-orbit coupled band structure calculat
 structure:
     mode: manual
     species: 
-        - Ca: 4
-        - F: 8
+        Ca: 4
+        F: 8
     lattice:
         a: 5.516052
         b: 5.516052
