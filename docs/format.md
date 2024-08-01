@@ -42,7 +42,7 @@ To our benefit, and our detriment, there is some flexibility in the way we can r
 There are only a few "rules" when it comes to abvio. 
 
 ### structure, incar, and kpoints must be in the highest scope of the file
-
+___
 Unfortunately, the difference is hard to see, but "scope" or hierarchy is distinguished by indentation. The following is a valid abvio yaml file
 
  Good: 
@@ -54,7 +54,7 @@ Unfortunately, the difference is hard to see, but "scope" or hierarchy is distin
     mode: spacing
  incar:
    ...
- ```
+```
 
 Where this one is not
 
@@ -67,16 +67,16 @@ Where this one is not
        mode: spacing
  incar:
    ...
- ```
+```
 
 Thankfully, abvio will let you know it is missing "kpoints" when you try to write the VASP input files.
 
 ### structure and kpoints must always have a mode tag
-
+___
 abvio requires a "mode" tag to handle the many options of creating structures and kpoint meshes. You can find all of these features listed further down in the documentation. 
 
 ### ranges requires a start, stop, and value
-
+___
 when assigning site properties like `MAGMOM` and `LDAUU`, there is a 'range' option. This is detected automatically (therefore no need to add `mode`), but will need to explicitly state the start, stop, and value of the site property in the following way
 
 ```yaml
@@ -104,7 +104,7 @@ Which might come in handy if you are trying to create a spin-orbit coupled antif
 
 
 ### structure
-
+___
 structure tries to be as flexible as possible, including allowing the user to simply just provide a path to a file if they so choose. 
 
 
@@ -117,7 +117,7 @@ prototype |  protoype, lattice | at least one lattice constant is required
 
 
 ### kpoints
-
+___
 kpoints is less flexible and is honestly the least well implemented feature at the moment. `spacing` must always be specified, regardless of the mode. The user must be aware that spacing can refer to kpoint mesh density per volume, unit length, or path. This might be confusing at first. I will put this in a warning box just so it's extra clear
 
 !!! danger
