@@ -3,7 +3,7 @@ Name: abvio
 Version: 0.0.1
 Summary: A Python package to simplify VASP input files
 Author-email: William Laderer <wtladerer@gmail.com>
-Project-URL: Documentation, https://wladerer.github.io/abvio/
+Project-URL: Documentation, https://wladerer.github.io/abvio/quickstart
 Project-URL: Issues, https://github.com/wladerer/abvio/issues
 Classifier: Intended Audience :: Science/Research
 Classifier: Programming Language :: Python :: 3

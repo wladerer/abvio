@@ -9,7 +9,7 @@ from pymatgen.core import Structure
 from pymatgen.io.vasp import Incar, Kpoints, Poscar
 
 from abvio.structure import structure_model_from_input_dict
-from abvio.kpoints import kpoints_model_from_dictionary
+from abvio.kpoints import KpointsMeta
 from abvio.incar import IncarModel
 
 log = logging.getLogger(__name__)
@@ -163,7 +163,7 @@ class Input:
                 f"No kpoints dictionary found in input file: keys passed are {self.input_dict.keys()}"
             )
 
-        kpoints_model = kpoints_model_from_dictionary(self.kpoints_dict)
+        kpoints_model = KpointsMeta.from_dict(self.kpoints_dict)
 
         if kpoints_model.requires_structure:
             kpoints = kpoints_model.kpoints(self.structure)

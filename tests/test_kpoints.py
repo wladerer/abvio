@@ -271,6 +271,49 @@ class TestKpointsModeDetection(unittest.TestCase):
         for test_dict in self.valid_test_dicts:
             kpoints = kp.kpoints_from_dictionary(test_dict['kpoints'], structure=test_structure)
             self.assertIsInstance(kpoints, Kpoints)
+
+    def test_invalid_kpoints_mode_detection(self):
+        test_dict = {
+            'kpoints': {'mode': 'line', 'spacing': 30, 'paths': [[0, 0], [0.5, 0.5]], 'labels': ["G", "X"]}
+        }
+
+        with self.assertRaises(ValidationError):
+            kp.kpoints_from_dictionary(test_dict['kpoints'])
+
+
+class TestKpointsMetaClass(unittest.TestCase):
+
+    gamma_dict = {'kpoints': {'mode': 'gamma', 'spacing': [3, 3, 3]}}
+    monkhorst_dict = {'kpoints': {'mode': 'Monkhorst', 'spacing': [2, 2, 1]}}
+    surface_dict = {'kpoints': {'mode': 'surface', 'spacing': 80000}}
+    line_dict = {'kpoints': {'mode': 'line', 'spacing': 30, 'paths': [[0, 0, 0], [0.5, 0.5, 0.5]], 'labels': ["G", "X"]} }
+    autoline_dict = {'kpoints': {'mode': 'autoline', 'spacing': 20}}
+
+    test_structure = Structure.from_file(os.path.join(structure_dir, 'CaF2.vasp'))
+
+    def test_kpoints_meta_class(self):
+        """Tests if KpointsMeta can create the correct Kpoints object"""
+            
+        for test_dict in [self.gamma_dict, self.monkhorst_dict, self.surface_dict, self.line_dict, self.autoline_dict]:
+            kpoints_model = kp.KpointsMeta.from_dict(test_dict['kpoints'])
+
+            if kpoints_model.requires_structure:
+                kpoints = kpoints_model.kpoints(self.test_structure)
+
+            else:
+                kpoints = kpoints_model.kpoints()
+
+            self.assertIsInstance(kpoints, Kpoints)
+            self.assertEqual(kpoints_model.mode, test_dict['kpoints']['mode'].lower())
+
+
+
+
+   
+
+    
+
+
             
 
 

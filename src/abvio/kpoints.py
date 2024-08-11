@@ -1,10 +1,11 @@
 import logging
-
+import collections
 
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Kpoints
 from pymatgen.symmetry.bandstructure import HighSymmKpath
 from pydantic import BaseModel, field_validator
+from pydantic._internal._model_construction import ModelMetaclass
 from typing import List, Union, Tuple
 
 log = logging.getLogger(__name__)
@@ -16,14 +17,42 @@ logging.basicConfig(level=logging.DEBUG, format=log_format, datefmt=date_format)
 
 Number = Union[int, float]
 IntArray3D = Tuple[int, int, int]
+IterableNumeric = Union[List[Number], Tuple[Number]]
 Matrix3D = List[Tuple[Number, Number, Number]]
 
 
-class BaseKpoints(BaseModel):
+
+
+class KpointsMeta(type):
+    _registry = {}
+
+    def __new__(cls, name, bases, class_dict):
+        new_class = super().__new__(cls, name, bases, class_dict)
+        if 'mode' in class_dict:
+            KpointsMeta._registry[class_dict['mode']] = new_class
+        return new_class
+
+    @classmethod
+    def from_dict(cls, kpoints_dictionary: dict):
+        base_model = BaseKpoints.validate(kpoints_dictionary)
+        mode = base_model.mode
+        KpointsClass = cls._registry.get(mode)
+
+        if KpointsClass is None:
+            raise ValueError(f"Unknown mode: {mode}")
+
+        return KpointsClass.validate(kpoints_dictionary)
+
+
+class CombinedMeta(KpointsMeta, ModelMetaclass):
+    """This is how we combine two metaclasses in Python"""
+    pass
+
+class BaseKpoints(BaseModel, metaclass=CombinedMeta):
     """Represents a base class for Kpoints"""
 
     mode: str
-    spacing: int | float | list
+    spacing: int | float | IntArray3D | IterableNumeric
 
     @property
     def requires_structure(self) -> bool:
@@ -61,6 +90,41 @@ class BaseKpoints(BaseModel):
             log.error(f"Invalid mode: {mode}")
             raise ValueError(f"Invalid mode: {mode}")
 
+    @field_validator("spacing")
+    def check_spacing(cls, spacing) -> int | float:
+        """Checks if the spacing is valid
+
+        Args:
+            spacing (Any): The spacing of the kpoints
+        Returns:
+            int | float | IntArray3D | numpy.ndarray : The spacing if it is valid
+        Raises:
+            ValueError: If the spacing is invalid
+        """
+
+        if isinstance(spacing, (int, float)):
+            if spacing < 0:
+                log.error(f"Spacing must be a non-negative integer: {spacing}")
+                raise ValueError(
+                    f"Spacing must be a non-negative integer: {spacing}"
+                )
+
+        elif isinstance(spacing, collections.abc.Iterable):
+            if len(spacing) != 3:
+                log.error(f"Spacing must have 3 elements: {spacing}")
+                raise ValueError(f"Spacing must have 3 elements: {spacing}")
+
+            for s in spacing:
+                if s < 0:
+                    log.error(f"Spacings must be all non-negative integer: {spacing}")
+                    raise ValueError(
+                        f"Spacings must be all non-negative integer: {spacing}")
+
+        else:
+            log.error(f"Invalid spacing: {spacing}")
+            raise ValueError(f"Invalid spacing: {spacing}")
+
+        return spacing
 
 class GammaKpoints(BaseKpoints):
     """Represents a Gamma centered grid of kpoints
@@ -153,28 +217,6 @@ class LineKpoints(BaseKpoints):
     paths: Matrix3D
     labels: List[str]
 
-    @field_validator("spacing")
-    def check_spacing(cls, spacing) -> int:
-        """Checks if the spacing is valid
-
-        Args:
-            spacing (int): The spacing of the kpoints
-
-        Returns:
-            int: The spacing if it is valid
-
-        Raises:
-            ValueError: If the spacing is invalid
-        """
-
-        if spacing < 1:
-            log.error(f"Spacing must be a non-negative integer: {spacing}")
-            raise ValueError(
-                f"Spacing must be a non-negative integer (i.e divisions per path): {spacing}"
-            )
-
-        return spacing
-
     @field_validator("paths")
     def check_paths(cls, paths) -> Matrix3D:
         """Checks if the paths are valid
@@ -266,27 +308,6 @@ class AutoLineKpoints(BaseKpoints):
     mode: str = "autoline"
     spacing: int
 
-    @field_validator("spacing")
-    def check_spacing(cls, spacing) -> int:
-        """Checks if the spacing is valid
-
-        Args:
-            spacing (int): The spacing of the kpoints
-
-        Returns:
-            int: The spacing if it is valid
-
-        Raises:
-            ValueError: If the spacing is invalid
-        """
-
-        if spacing < 1:
-            log.error(f"Spacing must be a non-negative integer: {spacing}")
-            raise ValueError(
-                f"Spacing must be a non-negative integer (i.e divisions per path): {spacing}"
-            )
-
-        return spacing
 
     def kpoints(self, structure: Structure):
         """Automatically generates line mode kpoints
@@ -302,6 +323,8 @@ class AutoLineKpoints(BaseKpoints):
         kpoints = Kpoints.automatic_linemode(self.spacing, kpath)
 
         return kpoints
+
+
 
 
 def kpoints_model_from_dictionary(kpoints_dictionary: dict) -> Kpoints:
