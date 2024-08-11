@@ -6,13 +6,6 @@ from pathlib import Path
 from pymatgen.core import Structure
 from scipy.spatial import distance
 
-import logging
-
-log = logging.getLogger(__name__)
-log_format = "%(asctime)s - %(levelname)s - %(message)s"
-date_format = "%Y-%m-%d"
-
-logging.basicConfig(level=logging.DEBUG, format=log_format, datefmt=date_format)
 
 def magnitude(value: int | float) -> int:
     """takes a numeric value and returns it's magnitude"""
@@ -54,24 +47,17 @@ class CheckIncar:
         # lookup each tag and check if the magnitude is correct, if the tag has a magnitude entry
         for tag, value in self.incar_dict.items():
             if tag in incar_tags:
-                log.debug(f"Checking tag: {tag}")
 
                 if "magnitude" in incar_tags[tag]:
-                    log.debug(f"Checking magnitude of tag: {tag}")
                     ref_magnitude = int(incar_tags[tag]["magnitude"])
-                    log.debug(f"Reference magnitude: {ref_magnitude}")
                     if isinstance(value, (list, tuple, np.ndarray)):
-                        log.debug(f"Checking magnitude of list: {value}")
                         for v in value:
                             if magnitude(v) != ref_magnitude:
-                                log.debug(f"Tag {tag} has incorrect magnitude: 1e{magnitude(v):.0g} != 1e{ref_magnitude:.0g}")
                                 self.messages.append(f"Tag {tag} has incorrect magnitude: 1e{magnitude(v):.0g} != 1e{ref_magnitude:.0g}")
                     else:
                         if magnitude(value) != ref_magnitude:
-                            log.debug(f"Tag {tag} has incorrect magnitude: 1e{magnitude(value):.0g} != 1e{ref_magnitude:.0g}")
                             self.messages.append(f"Tag {tag} has incorrect magnitude: 1e{magnitude(value):.0g} != 1e{ref_magnitude:.0g}")
         
-        log.debug(f"Messages: {self.messages}")
         return self.messages
 
     def check_dependencies(self):
@@ -109,6 +95,15 @@ class CheckIncar:
             estimated_nbands = estimate_nbands(structure)
             if user_nbands < estimated_nbands:
                 self.messages.append(f"NBANDS is too low: {user_nbands} < {estimated_nbands}")
+    
+        return self.messages
+
+    def check_all(self, structure: Structure):
+        self.check_magnitudes()
+        self.check_dependencies()
+        self.check_noncollinear_magmom()
+        self.check_nbands(structure)
+        return self.messages
 
 
 class CheckStructure:
@@ -117,20 +112,19 @@ class CheckStructure:
         self.structure: Structure = structure
         self.messages: list[str] = []
 
-    def check_positions(self):
-        """Checks if atoms are too close to each other"""
-            
+    def check_positions(self, min_distance: float = 0.5) -> list[str]:
+        """Checks if atoms are too close to each other."""
         cartesian_coords = self.structure.cart_coords
-
-        distance_matrix = distance.squareform(distance.pdist(cartesian_coords))
-
-        close_indices = np.where(distance_matrix < 0.5)
-
         symbols = self.structure.species
 
-        for i, j in zip(*close_indices):
-            self.messages.append(f"{symbols[i]}{i} is too close to {symbols[j]}{j}")
-    
+        distance_matrix = distance.squareform(distance.pdist(cartesian_coords))
+        close_indices = np.triu_indices_from(distance_matrix, k=1)
+        too_close = np.where(distance_matrix[close_indices] < min_distance)
+
+        for k in too_close[0]:
+            i, j = close_indices[0][k], close_indices[1][k]
+            self.messages.append(f"{symbols[i]}{i} is too close to {symbols[j]}{j} with a distance of {distance_matrix[i, j]:.3f} Å")
+        
         return self.messages
 
     def check_volume(self):
@@ -143,6 +137,10 @@ class CheckStructure:
 
         return self.messages
 
+    def check_all(self):
+        self.check_positions()
+        self.check_volume()
+        return self.messages
 
 
 
