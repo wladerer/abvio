@@ -53,7 +53,7 @@ def format_structure_output(structure: Structure) -> dict:
         dict: The dictionary representation of the structure
     """
 
-    #structure dict only needs lattice: a,b,c, alpha, beta, gamma ; species: list of species ; coords: list of coordinates
+    # structure dict only needs lattice: a,b,c, alpha, beta, gamma ; species: list of species ; coords: list of coordinates
     structure_dict = {
         "mode": "manual",
         "lattice": {
@@ -64,7 +64,7 @@ def format_structure_output(structure: Structure) -> dict:
             "beta": structure.lattice.beta,
             "gamma": structure.lattice.gamma,
         },
-        "species": [ str(specie) for specie in structure.species ],
+        "species": [str(specie) for specie in structure.species],
         "coords": structure.cart_coords.tolist(),
     }
 
@@ -103,7 +103,6 @@ def format_kpoints_output(kpoints: Kpoints) -> dict:
         dict: The dictionary representation of the kpoints
     """
 
-
     kpoints_dict = {
         "mode": conver_pmg_kpoints_name_to_abvio_name(kpoints.style),
         "shift": [float(shift) for shift in kpoints.kpts_shift],
@@ -122,7 +121,6 @@ def format_kpoints_output(kpoints: Kpoints) -> dict:
         kpoints_dict["labels"] = kpoints.labels
 
     return kpoints_dict
-
 
 
 class Input:
@@ -205,7 +203,7 @@ class Input:
                 warnings.warn(
                     "INCAR file contains unrecognized tags or values", UserWarning
                 )
-            
+
             incar.write_file(os.path.join(directory, "INCAR"))
 
         if self.kpoints_dict is not None:
@@ -233,7 +231,7 @@ class Input:
         input_dict = {
             "structure": structure_dict,
             "incar": incar_dict,
-            "kpoints": kpoints_dict
+            "kpoints": kpoints_dict,
         }
 
         return cls(input_dict)
@@ -244,16 +242,16 @@ class Input:
         Args:
             filepath: The path to write the abvio yaml file to
         """
-    
-        #prepare structure and kpoints dictionaries
+
+        # prepare structure and kpoints dictionaries
         structure_dict = format_structure_output(self.structure)
         kpoints_dict = format_kpoints_output(self.kpoints)
 
-        #write the dictionary to a file
+        # write the dictionary to a file
         output_dict = {
             "structure": structure_dict,
             "incar": self.incar_dict,
-            "kpoints": kpoints_dict
+            "kpoints": kpoints_dict,
         }
 
         with open(filename, "w") as f:

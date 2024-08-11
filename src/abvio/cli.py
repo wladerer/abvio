@@ -4,14 +4,14 @@ import yaml
 import logging
 import os
 
-from pathlib import Path
 from pydantic import ValidationError
 from abvio.io import Input
 from rich.console import Console
 from rich.table import Table
 
-#set logging level to silent
+# set logging level to silent
 logging.basicConfig(level=logging.ERROR)
+
 
 def check_input_file(input_file):
     try:
@@ -51,10 +51,9 @@ def preview(input_file):
     table.add_column("Structure")
     table.add_column("INCAR")
     table.add_column("KPOINTS")
-    table.add_row(f"{structure}", f"{incar}", f"{kpoints}") 
+    table.add_row(f"{structure}", f"{incar}", f"{kpoints}")
 
     return table
-
 
 
 def main():
@@ -75,7 +74,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Create a VASP input set from a YAML file"
     )
-    parser.add_argument("input", type=str, help="The path to the abvio YAML file or directory")
+    parser.add_argument(
+        "input", type=str, help="The path to the abvio YAML file or directory"
+    )
     parser.add_argument(
         "-o", "--output", type=str, help="The path to the output directory or file"
     )
@@ -86,7 +87,9 @@ def main():
         "--preview", action="store_true", help="Preview the input files"
     )
     parser.add_argument(
-        "--convert", action="store_true", help="Convert VASP input files to abvio format"
+        "--convert",
+        action="store_true",
+        help="Convert VASP input files to abvio format",
     )
     parser.add_argument(
         "--verbose", action="store_true", help="Increase output verbosity"
@@ -113,10 +116,8 @@ def main():
         input_object.write_inputs(output_path)
 
     if args.convert:
-
         input_object = Input.from_vaspset(user_input)
         input_object.write_file(output_path)
-
 
 
 if __name__ == "__main__":

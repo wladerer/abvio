@@ -186,11 +186,25 @@ def structure_from_prototype(
     log.debug(f"Creating structure from prototype: {log_dict}")
 
     if isinstance(lattice, Lattice):
-        lattice = {"a": lattice.a, "b": lattice.b, "c": lattice.c, "alpha": lattice.alpha, "beta": lattice.beta, "gamma": lattice.gamma}
+        lattice = {
+            "a": lattice.a,
+            "b": lattice.b,
+            "c": lattice.c,
+            "alpha": lattice.alpha,
+            "beta": lattice.beta,
+            "gamma": lattice.gamma,
+        }
 
     if isinstance(lattice, list) or isinstance(lattice, np.ndarray):
         lattice = Lattice(lattice)
-        lattice = {"a": lattice.a, "b": lattice.b, "c": lattice.c, "alpha": lattice.alpha, "beta": lattice.beta, "gamma": lattice.gamma}
+        lattice = {
+            "a": lattice.a,
+            "b": lattice.b,
+            "c": lattice.c,
+            "alpha": lattice.alpha,
+            "beta": lattice.beta,
+            "gamma": lattice.gamma,
+        }
 
     structure = Structure.from_prototype(prototype, species, **lattice)
 
@@ -238,8 +252,8 @@ class StructureMeta(type):
 
     def __new__(cls, name, bases, class_dict):
         new_class = super().__new__(cls, name, bases, class_dict)
-        if 'mode' in class_dict:
-            StructureMeta._registry[class_dict['mode']] = new_class
+        if "mode" in class_dict:
+            StructureMeta._registry[class_dict["mode"]] = new_class
         return new_class
 
     @classmethod
@@ -256,6 +270,7 @@ class StructureMeta(type):
 
 class CombinedMeta(StructureMeta, ModelMetaclass):
     """This is how we combine two metaclasses in Python"""
+
     pass
 
 

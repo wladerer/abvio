@@ -26,8 +26,8 @@ class KpointsMeta(type):
 
     def __new__(cls, name, bases, class_dict):
         new_class = super().__new__(cls, name, bases, class_dict)
-        if 'mode' in class_dict:
-            KpointsMeta._registry[class_dict['mode']] = new_class
+        if "mode" in class_dict:
+            KpointsMeta._registry[class_dict["mode"]] = new_class
         return new_class
 
     @classmethod
@@ -44,7 +44,9 @@ class KpointsMeta(type):
 
 class CombinedMeta(KpointsMeta, ModelMetaclass):
     """This is how we combine two metaclasses in Python"""
+
     pass
+
 
 class BaseKpoints(BaseModel, metaclass=CombinedMeta):
     """Represents a base class for Kpoints"""
@@ -103,9 +105,7 @@ class BaseKpoints(BaseModel, metaclass=CombinedMeta):
         if isinstance(spacing, (int, float)):
             if spacing < 0:
                 log.error(f"Spacing must be a non-negative integer: {spacing}")
-                raise ValueError(
-                    f"Spacing must be a non-negative integer: {spacing}"
-                )
+                raise ValueError(f"Spacing must be a non-negative integer: {spacing}")
 
         elif isinstance(spacing, collections.abc.Iterable):
             if len(spacing) != 3:
@@ -116,13 +116,15 @@ class BaseKpoints(BaseModel, metaclass=CombinedMeta):
                 if s < 0:
                     log.error(f"Spacings must be all non-negative integer: {spacing}")
                     raise ValueError(
-                        f"Spacings must be all non-negative integer: {spacing}")
+                        f"Spacings must be all non-negative integer: {spacing}"
+                    )
 
         else:
             log.error(f"Invalid spacing: {spacing}")
             raise ValueError(f"Invalid spacing: {spacing}")
 
         return spacing
+
 
 class GammaKpoints(BaseKpoints):
     """Represents a Gamma centered grid of kpoints
@@ -306,7 +308,6 @@ class AutoLineKpoints(BaseKpoints):
     mode: str = "autoline"
     spacing: int
 
-
     def kpoints(self, structure: Structure):
         """Automatically generates line mode kpoints
 
@@ -321,8 +322,6 @@ class AutoLineKpoints(BaseKpoints):
         kpoints = Kpoints.automatic_linemode(self.spacing, kpath)
 
         return kpoints
-
-
 
 
 def kpoints_model_from_dictionary(kpoints_dictionary: dict) -> Kpoints:

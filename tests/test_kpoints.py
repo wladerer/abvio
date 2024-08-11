@@ -1,4 +1,4 @@
-import abvio.kpoints as kp 
+import abvio.kpoints as kp
 
 import unittest
 import os
@@ -10,12 +10,12 @@ from pydantic import ValidationError
 
 
 base_path = Path(__file__).parent
-structure_dir = os.path.join(base_path, 'structures')
-files_dir = os.path.join(base_path, 'files')
-vaspset_dir = os.path.join(base_path, 'vaspsets')
+structure_dir = os.path.join(base_path, "structures")
+files_dir = os.path.join(base_path, "files")
+vaspset_dir = os.path.join(base_path, "vaspsets")
+
 
 class TestKpointsBaseModel(unittest.TestCase):
-
     def test_base_kpoints_valid(self):
         kpoints = kp.BaseKpoints(mode="surface", spacing=1)
         self.assertTrue(kpoints.requires_structure)
@@ -23,20 +23,17 @@ class TestKpointsBaseModel(unittest.TestCase):
         kpoints = kp.BaseKpoints(mode="autoline", spacing=1)
         self.assertTrue(kpoints.requires_structure)
 
-    
-    def test_variable_mesh_enums(self): 
-
-        gamma_test_cases = ['gamma', 'Gamma', 'GAMMA', 'g', 'G']
-        monkhorst_test_cases = ['monkhorst', 'Monkhorst', 'MONKHORST', 'm', 'M']
+    def test_variable_mesh_enums(self):
+        gamma_test_cases = ["gamma", "Gamma", "GAMMA", "g", "G"]
+        monkhorst_test_cases = ["monkhorst", "Monkhorst", "MONKHORST", "m", "M"]
 
         for case in gamma_test_cases:
             kpoints = kp.BaseKpoints(mode=case, spacing=1)
-            self.assertEqual(kpoints.mode, 'gamma')
+            self.assertEqual(kpoints.mode, "gamma")
 
         for case in monkhorst_test_cases:
             kpoints = kp.BaseKpoints(mode=case, spacing=1)
-            self.assertEqual(kpoints.mode, 'monkhorst')
-
+            self.assertEqual(kpoints.mode, "monkhorst")
 
     def test_base_kpoints_invalid(self):
         with self.assertRaises(ValueError):
@@ -50,27 +47,37 @@ class TestLineModeKpoints(unittest.TestCase):
     """Tests if we can create a LineModeKpoints object correctly"""
 
     def test_valid_linemode(self):
-        model = kp.LineKpoints(spacing=30, paths=[[0, 0, 0], [0.5, 0.5, 0.5]], labels=["G", "X"])
+        model = kp.LineKpoints(
+            spacing=30, paths=[[0, 0, 0], [0.5, 0.5, 0.5]], labels=["G", "X"]
+        )
         self.assertFalse(model.requires_structure)
-        
+
         kpoints = model.kpoints()
         self.assertIsInstance(kpoints, Kpoints)
 
     def test_invalid_linemode(self):
-        
         with self.assertRaises(ValueError):
-            model = kp.LineKpoints(spacing=30, paths=[[0, 0], [0.5, 0.5]], labels=["G", "X"])
+            model = kp.LineKpoints(
+                spacing=30, paths=[[0, 0], [0.5, 0.5]], labels=["G", "X"]
+            )
 
         with self.assertRaises(ValueError):
-            model = kp.LineKpoints(spacing=30, paths=[[0, 0, 0 ], [0.5, 0.5, 0.5]], labels=["G"])
+            model = kp.LineKpoints(
+                spacing=30, paths=[[0, 0, 0], [0.5, 0.5, 0.5]], labels=["G"]
+            )
 
         with self.assertRaises(ValueError):
-            model = kp.LineKpoints(spacing=30, paths=[[0, 0, 0], [0.5, 0.5, 0.5]], labels=["G", "X", "Y"])
+            model = kp.LineKpoints(
+                spacing=30, paths=[[0, 0, 0], [0.5, 0.5, 0.5]], labels=["G", "X", "Y"]
+            )
             model.kpoints()
 
         with self.assertRaises(ValueError):
-            model = kp.LineKpoints(spacing=0.1, paths=[[0, 0, 0], [0.5, 0.5, 0.5]], labels=["G", "X"])
+            model = kp.LineKpoints(
+                spacing=0.1, paths=[[0, 0, 0], [0.5, 0.5, 0.5]], labels=["G", "X"]
+            )
             model.kpoints()
+
 
 class TestAutoLineKpoints(unittest.TestCase):
     """Tests if we can create an AutoLineKpoints object correctly"""
@@ -80,7 +87,7 @@ class TestAutoLineKpoints(unittest.TestCase):
         model = kp.AutoLineKpoints(spacing=kpoints_divisions)
         self.assertTrue(model.requires_structure)
 
-        structure = Structure.from_file(os.path.join(structure_dir, 'CaF2.vasp'))
+        structure = Structure.from_file(os.path.join(structure_dir, "CaF2.vasp"))
         kpoints = model.kpoints(structure)
         self.assertIsInstance(kpoints, Kpoints)
         self.assertEqual(kpoints.num_kpts, kpoints_divisions)
@@ -88,7 +95,7 @@ class TestAutoLineKpoints(unittest.TestCase):
     def test_perovskite_auto_line(self):
         kpoints_divisions = 35
         model = kp.AutoLineKpoints(spacing=kpoints_divisions)
-        structure = Structure.from_file(os.path.join(structure_dir, 'CaTiO3.vasp'))
+        structure = Structure.from_file(os.path.join(structure_dir, "CaTiO3.vasp"))
         kpoints = model.kpoints(structure)
         self.assertIsInstance(kpoints, Kpoints)
         self.assertEqual(kpoints.num_kpts, kpoints_divisions)
@@ -100,17 +107,16 @@ class TestAutoLineKpoints(unittest.TestCase):
 
 
 class TestSurfaceKpoints(unittest.TestCase):
-
     def test_valid_surface(self):
         model = kp.SurfaceKpoints(spacing=80000)
-        structure = Structure.from_file(os.path.join(structure_dir, 'CaF2.vasp'))
+        structure = Structure.from_file(os.path.join(structure_dir, "CaF2.vasp"))
         kpoints = model.kpoints(structure)
-    
+
         self.assertTrue(model.requires_structure)
         self.assertIsInstance(kpoints, Kpoints)
 
-class TestGammaKpoints(unittest.TestCase):
 
+class TestGammaKpoints(unittest.TestCase):
     def test_valid_gamma(self):
         model = kp.GammaKpoints(spacing=[3, 3, 3])
         self.assertFalse(model.requires_structure)
@@ -119,31 +125,31 @@ class TestGammaKpoints(unittest.TestCase):
 
     def test_compare_from_file(self):
         model = kp.GammaKpoints(spacing=[7, 7, 7])
-        kpoints = [list(kpt) for kpt in  model.kpoints().kpts ]
-        kpoints_from_file = Kpoints.from_file(os.path.join(vaspset_dir, 'fluorite', 'KPOINTS'))
+        kpoints = [list(kpt) for kpt in model.kpoints().kpts]
+        kpoints_from_file = Kpoints.from_file(
+            os.path.join(vaspset_dir, "fluorite", "KPOINTS")
+        )
         expected_kpoints = [list(kpt) for kpt in kpoints_from_file.kpts]
         self.assertEqual(kpoints, expected_kpoints)
-    
+
     def test_write_kpoints(self):
         model = kp.GammaKpoints(spacing=[7, 7, 7])
         kpoints = model.kpoints()
-        kpoints.write_file(os.path.join('/tmp', 'test.kpoints'))
+        kpoints.write_file(os.path.join("/tmp", "test.kpoints"))
 
 
 class TestMonkhorstKpoints(unittest.TestCase):
-
     def test_valid_monkhorst(self):
         input_spacing = [2, 2, 1]
         model = kp.MonkhorstKpoints(spacing=input_spacing)
         kpoints = model.kpoints()
         self.assertIsInstance(kpoints, Kpoints)
 
-        for kpoint,expected_value in zip(kpoints.kpts[0], input_spacing):
+        for kpoint, expected_value in zip(kpoints.kpts[0], input_spacing):
             self.assertEqual(kpoint, expected_value)
-                    
+
 
 class TestAutoLinemodeFromInputDictionary(unittest.TestCase):
-
     def test_automatic_linemode_kpoints(self):
         """This test mimics the following yaml input
 
@@ -154,148 +160,174 @@ class TestAutoLinemodeFromInputDictionary(unittest.TestCase):
         """
         manual_model = kp.AutoLineKpoints(spacing=20)
 
-        test_dict = {
-            'kpoints': {'mode': 'autoline', 'spacing': 20}
-        }
-        test_model = kp.AutoLineKpoints.validate(test_dict['kpoints'])
+        test_dict = {"kpoints": {"mode": "autoline", "spacing": 20}}
+        test_model = kp.AutoLineKpoints.validate(test_dict["kpoints"])
 
         self.assertEqual(test_model, manual_model)
 
     def test_automatic_linemode_kpoint_gen(self):
         """Test creating Kpoints object from the input dictionary"""
 
-        test_dict = {
-            'kpoints': {'mode': 'autoline', 'spacing': 20}
-        }
-        test_model = kp.AutoLineKpoints.validate(test_dict['kpoints'])
+        test_dict = {"kpoints": {"mode": "autoline", "spacing": 20}}
+        test_model = kp.AutoLineKpoints.validate(test_dict["kpoints"])
 
-        structure = Structure.from_file(os.path.join(structure_dir, 'CaF2.vasp'))
+        structure = Structure.from_file(os.path.join(structure_dir, "CaF2.vasp"))
         kpoints = test_model.kpoints(structure)
 
         self.assertIsInstance(kpoints, Kpoints)
 
     def test_invalid_autoline_kpoints(self):
-        test_dict = {
-            'kpoints': {'mode': 'autoline', 'spacing': 0.1}
-        }
+        test_dict = {"kpoints": {"mode": "autoline", "spacing": 0.1}}
 
         with self.assertRaises(ValidationError):
-            kp.AutoLineKpoints.validate(test_dict['kpoints'])
+            kp.AutoLineKpoints.validate(test_dict["kpoints"])
 
     def test_surface_kpoints(self):
-        test_dict = {
-            'kpoints': {'mode': 'surface', 'spacing': 80000}
-        }
-        test_model = kp.SurfaceKpoints.validate(test_dict['kpoints'])
-        structure = Structure.from_file(os.path.join(structure_dir, 'CaF2.vasp'))
+        test_dict = {"kpoints": {"mode": "surface", "spacing": 80000}}
+        test_model = kp.SurfaceKpoints.validate(test_dict["kpoints"])
+        structure = Structure.from_file(os.path.join(structure_dir, "CaF2.vasp"))
         kpoints = test_model.kpoints(structure)
 
         self.assertIsInstance(test_model, kp.SurfaceKpoints)
         self.assertIsInstance(kpoints, Kpoints)
 
-    
+
 class TestLinemodeFromInputDictionary(unittest.TestCase):
-    
     def test_linemode_kpoints(self):
         """This test mimics the following yaml input
-    
+
         kpoints:
             mode: line
             spacing: 30
             paths: [[0, 0, 0], [0.5, 0.5, 0.5]]
             labels: ["G", "X"]
-    
+
         """
-        manual_model = kp.LineKpoints(spacing=30, paths=[[0, 0, 0], [0.5, 0.5, 0.5]], labels=["G", "X"])
-    
+        manual_model = kp.LineKpoints(
+            spacing=30, paths=[[0, 0, 0], [0.5, 0.5, 0.5]], labels=["G", "X"]
+        )
+
         test_dict = {
-            'kpoints': {'mode': 'line', 'spacing': 30, 'paths': [[0, 0, 0], [0.5, 0.5, 0.5]], 'labels': ["G", "X"]}
+            "kpoints": {
+                "mode": "line",
+                "spacing": 30,
+                "paths": [[0, 0, 0], [0.5, 0.5, 0.5]],
+                "labels": ["G", "X"],
+            }
         }
-        test_model = kp.LineKpoints.validate(test_dict['kpoints'])
-    
+        test_model = kp.LineKpoints.validate(test_dict["kpoints"])
+
         self.assertEqual(test_model, manual_model)
-    
+
     def test_linemode_kpoint_gen(self):
         """Test creating Kpoints object from the input dictionary"""
-    
+
         test_dict = {
-            'kpoints': {'mode': 'line', 'spacing': 30, 'paths': [[0, 0, 0], [0.5, 0.5, 0.5]], 'labels': ["G", "X"]}
+            "kpoints": {
+                "mode": "line",
+                "spacing": 30,
+                "paths": [[0, 0, 0], [0.5, 0.5, 0.5]],
+                "labels": ["G", "X"],
+            }
         }
-        test_model = kp.LineKpoints.validate(test_dict['kpoints'])
+        test_model = kp.LineKpoints.validate(test_dict["kpoints"])
         kpoints = test_model.kpoints()
-    
+
         self.assertIsInstance(kpoints, Kpoints)
-    
+
     def test_invalid_linemode_kpoints(self):
         test_dict = {
-            'kpoints': {'mode': 'line', 'spacing': 30, 'paths': [[0, 0], [0.5, 0.5]], 'labels': ["G", "X"]}
+            "kpoints": {
+                "mode": "line",
+                "spacing": 30,
+                "paths": [[0, 0], [0.5, 0.5]],
+                "labels": ["G", "X"],
+            }
         }
-    
+
         with self.assertRaises(ValidationError):
-            kp.LineKpoints.validate(test_dict['kpoints'])
-    
+            kp.LineKpoints.validate(test_dict["kpoints"])
+
     def test_invalid_linemode_kpoints_labels(self):
         test_dict = {
-            'kpoints': {'mode': 'line', 'spacing': 30, 'paths': [[0, 0, 0], [0.5, 0.5, 0.5]], 'labels': ["G"]}
+            "kpoints": {
+                "mode": "line",
+                "spacing": 30,
+                "paths": [[0, 0, 0], [0.5, 0.5, 0.5]],
+                "labels": ["G"],
+            }
         }
-    
+
         with self.assertRaises(ValidationError):
-            kp.LineKpoints.validate(test_dict['kpoints'])
-    
+            kp.LineKpoints.validate(test_dict["kpoints"])
+
 
 class TestKpointsModeDetection(unittest.TestCase):
-
     valid_test_dicts = [
         {
-            'kpoints': {'mode': 'line', 'spacing': 30, 'paths': [[0, 0, 0], [0.5, 0.5, 0.5]], 'labels': ["G", "X"]}
+            "kpoints": {
+                "mode": "line",
+                "spacing": 30,
+                "paths": [[0, 0, 0], [0.5, 0.5, 0.5]],
+                "labels": ["G", "X"],
+            }
         },
-        {
-            'kpoints': {'mode': 'autoline', 'spacing': 20}
-        },
-        {
-            'kpoints': {'mode': 'surface', 'spacing': 80000}
-        },
-        {
-            'kpoints': {'mode': 'gamma', 'spacing': [3, 3, 3]}
-        },
-        {
-            'kpoints': {'mode': 'Monkhorst', 'spacing': [2, 2, 1]}
-        },
-        {
-            'kpoints': {'mode': 'monkhorst-pack', 'spacing': [4, 2, 7]}
-        }
+        {"kpoints": {"mode": "autoline", "spacing": 20}},
+        {"kpoints": {"mode": "surface", "spacing": 80000}},
+        {"kpoints": {"mode": "gamma", "spacing": [3, 3, 3]}},
+        {"kpoints": {"mode": "Monkhorst", "spacing": [2, 2, 1]}},
+        {"kpoints": {"mode": "monkhorst-pack", "spacing": [4, 2, 7]}},
     ]
 
     def test_valid_kpoints_mode_detection(self):
-        test_structure = Structure.from_file(os.path.join(structure_dir, 'CaF2.vasp'))
+        test_structure = Structure.from_file(os.path.join(structure_dir, "CaF2.vasp"))
         for test_dict in self.valid_test_dicts:
-            kpoints = kp.kpoints_from_dictionary(test_dict['kpoints'], structure=test_structure)
+            kpoints = kp.kpoints_from_dictionary(
+                test_dict["kpoints"], structure=test_structure
+            )
             self.assertIsInstance(kpoints, Kpoints)
 
     def test_invalid_kpoints_mode_detection(self):
         test_dict = {
-            'kpoints': {'mode': 'line', 'spacing': 30, 'paths': [[0, 0], [0.5, 0.5]], 'labels': ["G", "X"]}
+            "kpoints": {
+                "mode": "line",
+                "spacing": 30,
+                "paths": [[0, 0], [0.5, 0.5]],
+                "labels": ["G", "X"],
+            }
         }
 
         with self.assertRaises(ValidationError):
-            kp.kpoints_from_dictionary(test_dict['kpoints'])
+            kp.kpoints_from_dictionary(test_dict["kpoints"])
 
 
 class TestKpointsMetaClass(unittest.TestCase):
+    gamma_dict = {"kpoints": {"mode": "gamma", "spacing": [3, 3, 3]}}
+    monkhorst_dict = {"kpoints": {"mode": "Monkhorst", "spacing": [2, 2, 1]}}
+    surface_dict = {"kpoints": {"mode": "surface", "spacing": 80000}}
+    line_dict = {
+        "kpoints": {
+            "mode": "line",
+            "spacing": 30,
+            "paths": [[0, 0, 0], [0.5, 0.5, 0.5]],
+            "labels": ["G", "X"],
+        }
+    }
+    autoline_dict = {"kpoints": {"mode": "autoline", "spacing": 20}}
 
-    gamma_dict = {'kpoints': {'mode': 'gamma', 'spacing': [3, 3, 3]}}
-    monkhorst_dict = {'kpoints': {'mode': 'Monkhorst', 'spacing': [2, 2, 1]}}
-    surface_dict = {'kpoints': {'mode': 'surface', 'spacing': 80000}}
-    line_dict = {'kpoints': {'mode': 'line', 'spacing': 30, 'paths': [[0, 0, 0], [0.5, 0.5, 0.5]], 'labels': ["G", "X"]} }
-    autoline_dict = {'kpoints': {'mode': 'autoline', 'spacing': 20}}
-
-    test_structure = Structure.from_file(os.path.join(structure_dir, 'CaF2.vasp'))
+    test_structure = Structure.from_file(os.path.join(structure_dir, "CaF2.vasp"))
 
     def test_kpoints_meta_class(self):
         """Tests if KpointsMeta can create the correct Kpoints object"""
-            
-        for test_dict in [self.gamma_dict, self.monkhorst_dict, self.surface_dict, self.line_dict, self.autoline_dict]:
-            kpoints_model = kp.KpointsMeta.from_dict(test_dict['kpoints'])
+
+        for test_dict in [
+            self.gamma_dict,
+            self.monkhorst_dict,
+            self.surface_dict,
+            self.line_dict,
+            self.autoline_dict,
+        ]:
+            kpoints_model = kp.KpointsMeta.from_dict(test_dict["kpoints"])
 
             if kpoints_model.requires_structure:
                 kpoints = kpoints_model.kpoints(self.test_structure)
@@ -304,18 +336,7 @@ class TestKpointsMetaClass(unittest.TestCase):
                 kpoints = kpoints_model.kpoints()
 
             self.assertIsInstance(kpoints, Kpoints)
-            self.assertEqual(kpoints_model.mode, test_dict['kpoints']['mode'].lower())
-
-
-
-
-   
-
-    
-
-
-            
-
+            self.assertEqual(kpoints_model.mode, test_dict["kpoints"]["mode"].lower())
 
 
 if __name__ == "__main__":
