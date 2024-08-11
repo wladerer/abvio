@@ -1,8 +1,15 @@
 import unittest
+import yaml
+import os 
+
 import abvio.check as check
+import abvio.io as io
 
 from pymatgen.core.structure import Structure
+from pathlib import Path
 
+base_path = Path(__file__).parent
+files_dir = os.path.join(base_path, "files")
 
 class TestNumericalFunctions(unittest.TestCase):
     def test_magnitude(self):
@@ -119,6 +126,15 @@ class TestCheckStructure(unittest.TestCase):
         structure_checker = check.CheckStructure(structure)
         messages = structure_checker.check_volume()
         self.assertEqual(len(messages), 1)
+
+
+# class TestCheckFullInput(unittest.TestCase):
+
+#     def test_valid_input(self):
+#         """creates an Input object and validates it"""
+            
+#         InputObject = io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
+#         messages = InputObject.check()
 
 
 if __name__ == "__main__":
