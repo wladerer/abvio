@@ -5,7 +5,6 @@ from pymatgen.core.structure import Structure
 
 
 class TestNumericalFunctions(unittest.TestCase):
-
     def test_magnitude(self):
         """Tests if the magnitude function returns the correct magnitude of a number"""
 
@@ -15,7 +14,6 @@ class TestNumericalFunctions(unittest.TestCase):
         for value, expected_magnitude in zip(test_values, expected_magnitudes):
             self.assertEqual(check.magnitude(value), expected_magnitude)
 
-    
     def test_nacl_bands_estimate(self):
         """Tests if estimate_bands returns the correct number of bands for NaCl"""
 
@@ -23,7 +21,7 @@ class TestNumericalFunctions(unittest.TestCase):
         coords = [[0, 0, 0], [0.5, 0.5, 0.5]]
         lattice = [[5, 0, 0], [0, 5, 0], [0, 0, 5]]
         structure = Structure(lattice, species, coords)
-        
+
         self.assertEqual(check.estimate_nbands(structure), 14)
 
     def test_perovskite_nbands_count(self):
@@ -36,15 +34,18 @@ class TestNumericalFunctions(unittest.TestCase):
 
         self.assertEqual(nbands, 72)
 
-    
-
 
 class TestCheckIncar(unittest.TestCase):
-
     def test_check_magnitudes(self):
         """Tests if the magnitudes of the INCAR file are checked correctly"""
 
-        test_incar_dict = { "ISMEAR": 1, "SIGMA": 0.1, "LWAVE": False, "MAGMOM": [2, 2, 2], "ENCUT": 620}
+        test_incar_dict = {
+            "ISMEAR": 1,
+            "SIGMA": 0.1,
+            "LWAVE": False,
+            "MAGMOM": [2, 2, 2],
+            "ENCUT": 620,
+        }
 
         incar_checker = check.CheckIncar(test_incar_dict)
         messages = incar_checker.check_magnitudes()
@@ -53,7 +54,13 @@ class TestCheckIncar(unittest.TestCase):
     def test_check_magnitudes_fail(self):
         """Tests if the magnitudes of the INCAR file are checked correctly"""
 
-        test_incar_dict = { "ISMEAR": 1, "SIGMA": 100, "LWAVE": False, "MAGMOM": [30, 2, 2], "ENCUT": 90}
+        test_incar_dict = {
+            "ISMEAR": 1,
+            "SIGMA": 100,
+            "LWAVE": False,
+            "MAGMOM": [30, 2, 2],
+            "ENCUT": 90,
+        }
 
         incar_checker = check.CheckIncar(test_incar_dict)
         messages = incar_checker.check_magnitudes()
@@ -62,15 +69,14 @@ class TestCheckIncar(unittest.TestCase):
     def test_check_dependencies(self):
         """Tests if the dependencies of the INCAR file are checked correctly"""
 
-        valid_incar_dependencies = { "ISPIN": 2, "MAGMOM": 2}
-        
+        valid_incar_dependencies = {"ISPIN": 2, "MAGMOM": 2}
 
         incar_checker = check.CheckIncar(valid_incar_dependencies)
         messages = incar_checker.check_dependencies()
         self.assertEqual(messages, [])
 
     def test_check_dependencies_fail(self):
-        invalid_incar_dependencies = { "ISPIN": 2}
+        invalid_incar_dependencies = {"ISPIN": 2}
         incar_checker = check.CheckIncar(invalid_incar_dependencies)
         messages = incar_checker.check_dependencies()
 
@@ -78,8 +84,6 @@ class TestCheckIncar(unittest.TestCase):
 
 
 class TestCheckStructure(unittest.TestCase):
-
-
     def test_valid_structure(self):
         """Tests if the structure is checked correctly"""
 
@@ -87,7 +91,7 @@ class TestCheckStructure(unittest.TestCase):
         coords = [[0, 0, 0], [0.5, 0.5, 0.5]]
         lattice = [[5, 0, 0], [0, 5, 0], [0, 0, 5]]
         structure = Structure(lattice, species, coords)
-        
+
         structure_checker = check.CheckStructure(structure)
         messages = structure_checker.check_all()
         self.assertEqual(messages, [])
@@ -99,7 +103,7 @@ class TestCheckStructure(unittest.TestCase):
         coords = [[0, 0, 0], [0.0, 0.0, 0.0]]
         lattice = [[5, 0, 0], [0, 5, 0], [0, 0, 5]]
         structure = Structure(lattice, species, coords)
-        
+
         structure_checker = check.CheckStructure(structure)
         messages = structure_checker.check_all()
         self.assertEqual(len(messages), 1)
@@ -111,11 +115,11 @@ class TestCheckStructure(unittest.TestCase):
         coords = [[0, 0, 0], [0.5, 0.5, 0.5]]
         lattice = [[0.001, 0, 0], [0, 0.001, 0], [0, 0, 0.001]]
         structure = Structure(lattice, species, coords)
-        
+
         structure_checker = check.CheckStructure(structure)
         messages = structure_checker.check_volume()
         self.assertEqual(len(messages), 1)
-        
+
 
 if __name__ == "__main__":
     unittest.main()
