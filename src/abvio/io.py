@@ -11,7 +11,7 @@ from pymatgen.io.vasp import Incar, Kpoints, Poscar
 from abvio.structure import StructureMeta
 from abvio.kpoints import KpointsMeta
 from abvio.incar import IncarModel
-from abvio.check import CheckIncar, CheckStructure
+
 
 log = logging.getLogger(__name__)
 log_format = "%(asctime)s - %(levelname)s - %(message)s"
@@ -258,21 +258,4 @@ class Input:
         with open(filename, "w") as f:
             yaml.dump(output_dict, f, default_flow_style=None)
 
-    def check(self) -> dict:
-        """Checks the input files for correctness
 
-        Returns:
-            dict: The dictionary containing the error messages
-        """
-
-        messages = {}
-
-        # check the INCAR file
-        incar_checker = CheckIncar(self.incar.as_dict())
-        messages["incar"] = incar_checker.check_all(self.structure)
-
-        # check the structure
-        structure_checker = CheckStructure(self.structure)
-        messages["structure"] = structure_checker.check_all()
-
-        return messages

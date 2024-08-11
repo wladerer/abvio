@@ -191,27 +191,6 @@ class TestPerovskiteSet(unittest.TestCase):
         )
 
 
-class TestCheckInputs(unittest.TestCase):
-    """Tests if the check_inputs method works correctly"""
-
-    def test_valid_input(self):
-        """Tests if the check_inputs method works correctly"""
-
-        perovskite_dir = os.path.join(vaspset_dir, "perovskite")
-        input_file = os.path.join(perovskite_dir, "equivalent.yaml")
-        InputObject = io.Input.from_file(input_file)
-
-        self.assertEqual(InputObject.check(), [])
-
-    def test_invalid_input(self):
-        """Tests if the check_inputs method works correctly"""
-
-        perovskite_dir = os.path.join(vaspset_dir, "perovskite")
-        input_file = os.path.join(perovskite_dir, "invalid.yaml")
-        InputObject = io.Input.from_file(input_file)
-
-        messages = InputObject.check()
-        self.assertEqual(len(messages), 2)
 
 if __name__ == "__main__":
     unittest.main()
