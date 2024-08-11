@@ -1,17 +1,8 @@
 import unittest
-import os 
-import yaml 
 import abvio.check as check
 
 from pymatgen.core.structure import Structure
 
-import logging
-
-log = logging.getLogger(__name__)
-log_format = "%(asctime)s - %(levelname)s - %(message)s"
-date_format = "%Y-%m-%d"
-
-logging.basicConfig(level=logging.DEBUG, format=log_format, datefmt=date_format)
 
 class TestNumericalFunctions(unittest.TestCase):
 
@@ -86,6 +77,44 @@ class TestCheckIncar(unittest.TestCase):
         self.assertEqual(len(messages), 1)
 
 
+class TestCheckStructure(unittest.TestCase):
+
+
+    def test_valid_structure(self):
+        """Tests if the structure is checked correctly"""
+
+        species = ["Na", "Cl"]
+        coords = [[0, 0, 0], [0.5, 0.5, 0.5]]
+        lattice = [[5, 0, 0], [0, 5, 0], [0, 0, 5]]
+        structure = Structure(lattice, species, coords)
+        
+        structure_checker = check.CheckStructure(structure)
+        messages = structure_checker.check_all()
+        self.assertEqual(messages, [])
+
+    def test_invalid_structure_atoms(self):
+        """Tests if overlapping atoms are detected"""
+
+        species = ["Na", "Na"]
+        coords = [[0, 0, 0], [0.0, 0.0, 0.0]]
+        lattice = [[5, 0, 0], [0, 5, 0], [0, 0, 5]]
+        structure = Structure(lattice, species, coords)
+        
+        structure_checker = check.CheckStructure(structure)
+        messages = structure_checker.check_all()
+        self.assertEqual(len(messages), 1)
+
+    def test_invalid_structure_volume(self):
+        """Tests if small volumes are detected"""
+
+        species = ["Na", "Cl"]
+        coords = [[0, 0, 0], [0.5, 0.5, 0.5]]
+        lattice = [[0.001, 0, 0], [0, 0.001, 0], [0, 0, 0.001]]
+        structure = Structure(lattice, species, coords)
+        
+        structure_checker = check.CheckStructure(structure)
+        messages = structure_checker.check_volume()
+        self.assertEqual(len(messages), 1)
         
 
 if __name__ == "__main__":
