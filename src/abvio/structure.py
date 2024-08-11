@@ -1,6 +1,7 @@
 from pymatgen.io.vasp import Poscar
 from pymatgen.core import Structure, Lattice
 from pydantic import BaseModel, field_validator, model_validator
+from pydantic._internal._model_construction import ModelMetaclass
 from typing import List, Union, Tuple
 from pathlib import Path
 
@@ -185,7 +186,11 @@ def structure_from_prototype(
     log.debug(f"Creating structure from prototype: {log_dict}")
 
     if isinstance(lattice, Lattice):
-        lattice = lattice.as_dict()
+        lattice = {"a": lattice.a, "b": lattice.b, "c": lattice.c, "alpha": lattice.alpha, "beta": lattice.beta, "gamma": lattice.gamma}
+
+    if isinstance(lattice, list) or isinstance(lattice, np.ndarray):
+        lattice = Lattice(lattice)
+        lattice = {"a": lattice.a, "b": lattice.b, "c": lattice.c, "alpha": lattice.alpha, "beta": lattice.beta, "gamma": lattice.gamma}
 
     structure = Structure.from_prototype(prototype, species, **lattice)
 
@@ -226,7 +231,35 @@ def structure_from_string(string: str) -> Structure:
     return Poscar.from_str(string).structure
 
 
-class BaseStructure(BaseModel):
+class StructureMeta(type):
+    """Metaclass for the Structure class that combines the BaseModel and StructureMeta metaclasses"""
+
+    _registry = {}
+
+    def __new__(cls, name, bases, class_dict):
+        new_class = super().__new__(cls, name, bases, class_dict)
+        if 'mode' in class_dict:
+            StructureMeta._registry[class_dict['mode']] = new_class
+        return new_class
+
+    @classmethod
+    def from_dict(cls, structure_dictionary: dict):
+        base_model = BaseStructure.validate(structure_dictionary)
+        mode = base_model.mode
+        StructureClass = cls._registry.get(mode)
+
+        if StructureClass is None:
+            raise ValueError(f"Unknown mode: {mode}")
+
+        return StructureClass.validate(structure_dictionary)
+
+
+class CombinedMeta(StructureMeta, ModelMetaclass):
+    """This is how we combine two metaclasses in Python"""
+    pass
+
+
+class BaseStructure(BaseModel, metaclass=CombinedMeta):
     mode: str
 
     @field_validator("mode")
@@ -291,7 +324,7 @@ class PrototypeStructure(BaseStructure):
 
     mode: str = "prototype"
     species: list[str] | list[dict]
-    lattice: dict
+    lattice: dict | Lattice | ArrayLike
     prototype: str
 
     @field_validator("species")

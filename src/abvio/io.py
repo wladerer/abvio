@@ -8,7 +8,7 @@ from pathlib import Path
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Incar, Kpoints, Poscar
 
-from abvio.structure import structure_model_from_input_dict
+from abvio.structure import StructureMeta
 from abvio.kpoints import KpointsMeta
 from abvio.incar import IncarModel
 
@@ -139,7 +139,7 @@ class Input:
                 f"No structure dictionary found in input file: keys passed are {self.input_dict.keys()}"
             )
 
-        structure_model = structure_model_from_input_dict(self.structure_dict)
+        structure_model = StructureMeta.from_dict(self.structure_dict)
         structure = structure_model.structure
 
         return structure

@@ -251,5 +251,69 @@ class TestStructureFromInputDict(unittest.TestCase):
             st.structure_model_from_input_dict(input_dict)
 
 
+class TestStructureMetaClass(unittest.TestCase):
+
+    perovskite_structure = Structure.from_file(os.path.join(structure_dir, 'CaTiO3.vasp'))
+
+    def test_valid_external_structure_meta(self):
+
+        input_dict = {
+            "mode": "external",
+            "file": os.path.join(structure_dir, 'CaTiO3.vasp')
+        }
+
+        model = st.StructureMeta.from_dict(input_dict)
+        structure = model.structure
+
+        self.assertIsInstance(structure, Structure)
+
+    def test_valid_prototype_structure_meta(self):
+            
+            input_dict = {
+                "mode": "prototype",
+                "species": ["Ca", "Ti", "O"],
+                "lattice": {"a": 3.889471},
+                "prototype": "perovskite"
+            }
+    
+            model = st.StructureMeta.from_dict(input_dict)
+            structure = model.structure
+    
+            self.assertIsInstance(structure, Structure)
+
+            generated_matrix = structure.lattice.matrix
+            #check if generated matrix is similar to the one in the file
+            self.assertTrue(matrix_similarity(generated_matrix, self.perovskite_structure.lattice.matrix))
+
+    def test_valid_manual_structure_meta(self):
+
+        input_dict = {
+            "mode": "manual",
+            "lattice": [
+                [1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1]
+            ],
+            "species": ["Mg", "O"],
+            "coords": [[0, 0, 0], [0.5, 0.5,0.5]]
+        }
+
+        model = st.StructureMeta.from_dict(input_dict)
+        structure = model.structure
+
+        self.assertIsInstance(structure, Structure)
+
+   
+    def test_invalid_structure_meta(self):
+
+        input_dict = {
+            "mode": "external",
+            "file": os.path.join(structure_dir, 'CaTiO3.vasp'),
+            "string": "string"
+        }
+
+        with self.assertRaises(ValueError):
+            st.StructureMeta.from_dict(input_dict)
+
 if __name__ == "__main__":
     unittest.main()

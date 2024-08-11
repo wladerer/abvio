@@ -21,8 +21,6 @@ IterableNumeric = Union[List[Number], Tuple[Number]]
 Matrix3D = List[Tuple[Number, Number, Number]]
 
 
-
-
 class KpointsMeta(type):
     _registry = {}
 
