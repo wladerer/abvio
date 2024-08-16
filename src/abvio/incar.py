@@ -383,3 +383,8 @@ class IncarModel(BaseModel):
         incar = Incar(formatted_incar_dictionary)
 
         return incar
+    
+    def check(self, structure: Structure = None):
+        """Checks if the INCAR has any common errors"""
+
+        
