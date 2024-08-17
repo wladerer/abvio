@@ -9,8 +9,7 @@ from scipy.spatial import distance
 
 def magnitude(value: int | float) -> int:
     """takes a numeric value and returns it's magnitude"""
-    magnitude = np.floor(np.log10(value)).astype(int)
-    return magnitude
+    return np.floor(np.log10(value)).astype(int)
 
 
 def lower_keys(dictionary: dict) -> dict:
@@ -20,13 +19,13 @@ def lower_keys(dictionary: dict) -> dict:
 
 def estimate_nbands(structure: Structure) -> int:
     """Calculates the number of valence electrons in a structure"""
-    rough_valence_count = 0
-    for site in structure:
-        rough_valence_count += sum(
-            [n_l_count[-1] for n_l_count in site.specie.full_electronic_structure[:-2]]
+    return sum(
+        sum(
+            n_l_count[-1]
+            for n_l_count in site.specie.full_electronic_structure[:-2]
         )
-
-    return rough_valence_count
+        for site in structure
+    )
 
 
 class CheckIncar:
@@ -52,20 +51,18 @@ class CheckIncar:
 
         # lookup each tag and check if the magnitude is correct, if the tag has a magnitude entry
         for tag, value in self.incar_dict.items():
-            if tag in incar_tags:
-                if "magnitude" in incar_tags[tag]:
-                    ref_magnitude = int(incar_tags[tag]["magnitude"])
-                    if isinstance(value, (list, tuple, np.ndarray)):
-                        for v in value:
-                            if magnitude(v) != ref_magnitude:
-                                self.messages.append(
-                                    f"Tag {tag} has incorrect magnitude: 1e{magnitude(v):.0g} != 1e{ref_magnitude:.0g}"
-                                )
-                    else:
-                        if magnitude(value) != ref_magnitude:
+            if tag in incar_tags and "magnitude" in incar_tags[tag]:
+                ref_magnitude = int(incar_tags[tag]["magnitude"])
+                if isinstance(value, (list, tuple, np.ndarray)):
+                    for v in value:
+                        if magnitude(v) != ref_magnitude:
                             self.messages.append(
-                                f"Tag {tag} has incorrect magnitude: 1e{magnitude(value):.0g} != 1e{ref_magnitude:.0g}"
+                                f"Tag {tag} has incorrect magnitude: 1e{magnitude(v):.0g} != 1e{ref_magnitude:.0g}"
                             )
+                elif magnitude(value) != ref_magnitude:
+                    self.messages.append(
+                        f"Tag {tag} has incorrect magnitude: 1e{magnitude(value):.0g} != 1e{ref_magnitude:.0g}"
+                    )
 
         return self.messages
 
