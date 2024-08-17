@@ -10,7 +10,7 @@ from pymatgen.io.vasp import Incar, Kpoints, Poscar
 from abvio.structure import StructureMeta
 from abvio.kpoints import KpointsMeta
 from abvio.incar import IncarModel
-
+from abvio.scheduler import Job
 
 
 def load_abvio_yaml(filepath: Path | str) -> dict:
@@ -121,6 +121,7 @@ class Input:
         self.structure_dict = input_dictionary.get("structure")
         self.incar_dict = input_dictionary.get("incar")
         self.kpoints_dict = input_dictionary.get("kpoints")
+        self.job_dict = input_dictionary.get("job")
 
     @property
     def structure(self) -> Structure:
@@ -162,6 +163,17 @@ class Input:
 
         return kpoints
 
+    @property
+    def job(self) -> Job:
+        if self.job_dict is None:
+            raise ValueError(
+                f"No job dictionary found in input file: keys passed are {self.input_dict.keys()}"
+            )
+        
+        job = Job.from_dict(self.job_dict)
+        return job
+
+
     @classmethod
     def from_file(cls, filepath: Path | str):
         """Creates an Input object from a file
@@ -201,6 +213,10 @@ class Input:
         if self.kpoints_dict is not None:
             kpoints = self.kpoints
             kpoints.write_file(os.path.join(directory, "KPOINTS"))
+
+        if self.job_dict is not None:
+            job = self.job
+            job.to_file(os.path.join(directory, "submit.sh"))
 
     @classmethod
     def from_vaspset(cls, directory: Path | str) -> dict:

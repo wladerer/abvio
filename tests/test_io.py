@@ -6,6 +6,7 @@ import abvio.io as io
 from pathlib import Path
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Incar, Kpoints, Poscar
+from unittest.mock import patch, mock_open
 
 
 base_path = Path(__file__).parent
@@ -189,6 +190,61 @@ class TestPerovskiteSet(unittest.TestCase):
         self.assertEqual(
             InputObject.structure.reduced_formula, expected_structure.reduced_formula
         )
+
+    def test_slurm_job_creation(self):
+        """Tests if job is created correctly"""
+
+        perovskite_dir = os.path.join(vaspset_dir, "perovskite")
+        input_file = os.path.join(perovskite_dir, "equivalent.yaml")
+        InputObject = io.Input.from_file(input_file)
+
+        job = InputObject.job
+        self.assertEqual(job.scheduler, 'slurm')
+        self.assertEqual(job.shebang, '#!/bin/bash')
+        self.assertEqual(job.script, ['echo "Hello World"', 'echo "Goodbye World"'])
+        self.assertIn('cores', job.directives_dict)
+        self.assertIn('memory', job.directives_dict)
+
+        job.to_file("/tmp/submit.sh")
+        self.assertTrue(os.path.exists("/tmp/submit.sh"))
+
+        with open("/tmp/submit.sh", "r") as f:
+            content = f.read()
+            self.assertIn("#!/bin/bash", content)
+            self.assertIn("--cpus-per-task=4", content)
+            self.assertIn("--mem=8G", content)
+            self.assertIn("echo \"Hello World\"", content)
+            self.assertIn("echo \"Goodbye World\"", content)
+
+        os.remove("/tmp/submit.sh")
+
+    def test_pbs_job_creation(self):
+        """tests if pbs job is created correctly"""
+
+        perovskite_dir = os.path.join(vaspset_dir, "perovskite")
+        input_file = os.path.join(perovskite_dir, "equivalent_pbs.yaml")
+        InputObject = io.Input.from_file(input_file)
+
+        job = InputObject.job
+        job.scheduler = 'pbs'
+
+        job.to_file("/tmp/submit.sh")
+        self.assertTrue(os.path.exists("/tmp/submit.sh"))
+
+        with open("/tmp/submit.sh", "r") as f:
+            content = f.read()
+
+            self.assertIn("#!/bin/bash", content)
+            self.assertIn("#PBS -l select=1:ncpus=4:mem=7630MB", content)
+            self.assertIn("#PBS -l walltime=00:30:00", content)
+            self.assertIn("#PBS -l nodes=2", content)
+            self.assertIn("echo \"Hello World\"", content)
+            self.assertIn("echo \"Goodbye World\"", content)
+
+        os.remove("/tmp/submit.sh")
+
+
+
 
 
 if __name__ == "__main__":

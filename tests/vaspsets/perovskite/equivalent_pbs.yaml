@@ -21,7 +21,7 @@ kpoints:
   mode: gamma
   spacing: [7, 7, 7]
 job:
-  scheduler: 'slurm'
+  scheduler: 'pbs'
   directives_dict:
     nodes: 2
     cores: 4
