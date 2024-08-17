@@ -214,9 +214,9 @@ class TestReadSiteProperties(unittest.TestCase):
     index_yaml_file = os.path.join(files_dir, "magmom_index.yaml")
     range_yaml_file = os.path.join(files_dir, "magmom_range.yaml")
 
-    species_test_dict = Io.load(species_yaml_file)["incar"]
-    index_test_dict = Io.load(index_yaml_file)["incar"]
-    range_test_dict = Io.load(range_yaml_file)["incar"]
+    species_test_dict = Io.load_abvio_yaml(species_yaml_file)["incar"]
+    index_test_dict = Io.load_abvio_yaml(index_yaml_file)["incar"]
+    range_test_dict = Io.load_abvio_yaml(range_yaml_file)["incar"]
 
     noncollinear_species_yaml_file = os.path.join(
         files_dir, "magmom_noncollinear_species.yaml"
@@ -228,9 +228,9 @@ class TestReadSiteProperties(unittest.TestCase):
         files_dir, "magmom_noncollinear_range.yaml"
     )
 
-    noncollinear_species_test_dict = Io.load(noncollinear_species_yaml_file)["incar"]
-    noncollinear_index_test_dict = Io.load(noncollinear_index_yaml_file)["incar"]
-    noncollinear_range_test_dict = Io.load(noncollinear_range_yaml_file)["incar"]
+    noncollinear_species_test_dict = Io.load_abvio_yaml(noncollinear_species_yaml_file)["incar"]
+    noncollinear_index_test_dict = Io.load_abvio_yaml(noncollinear_index_yaml_file)["incar"]
+    noncollinear_range_test_dict = Io.load_abvio_yaml(noncollinear_range_yaml_file)["incar"]
 
     def test_read_magmom_by_species(self):
         magmom_dict = self.species_test_dict.get("magmom")

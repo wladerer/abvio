@@ -23,7 +23,7 @@ class TestLoadFunction(unittest.TestCase):
         invalid_file = os.path.join(files_dir, "invalid.yaml")
 
         with self.assertRaises(yaml.scanner.ScannerError):
-            io.load(invalid_file)
+            io.load_abvio_yaml(invalid_file)
 
     def test_load_invalid_yaml(self):
         """Test if load can read an invalid yaml file"""
@@ -31,7 +31,7 @@ class TestLoadFunction(unittest.TestCase):
         invalid_file = os.path.join(files_dir, "invalid.yaml")
 
         with self.assertRaises(yaml.YAMLError):
-            io.load(invalid_file)
+            io.load_abvio_yaml(invalid_file)
 
 
 class TestCreateInput(unittest.TestCase):
