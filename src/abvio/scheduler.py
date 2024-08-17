@@ -1,8 +1,8 @@
 import inspect
-from typing import Callable, Dict, Any, List, Optional, Union
+from typing import Callable, Dict, Any, List, Optional, Union, Tuple
 from dask_jobqueue.pbs import PBSJob
 from dask_jobqueue.slurm import SLURMJob
-from pydantic import BaseModel, field_validator, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 # Define job parameters with aliases
@@ -142,41 +142,46 @@ class Job(BaseModel):
         shebang = directives_dict.get('shebang', '')
         if not shebang.startswith('#!'):
             raise ValueError("Shebang must start with '#!'")
-        
+
         script = directives_dict.get('script')
         if not isinstance(script, list) or not all(isinstance(line, str) for line in script):
             raise ValueError("Script must be a list of strings.")
-        
+
         #must have at least cores and memory
-        if not any(k in directives_dict for k in ['cores', 'memory']):
+        if all(k not in directives_dict for k in ['cores', 'memory']):
             raise ValueError("Job must specify at least 'cores' and 'memory'.")
-        
+
         return values
 
     def __init__(self, scheduler: str, directives_dict: Dict[str, Any]) -> None:
         super().__init__(scheduler=scheduler, directives_dict=directives_dict)
-        
-        # Resolve aliases and filter parameters
-        job_parameters = resolve_aliases(directives_dict, JOB_PARAMETERS)
-        extra_parameters = {k: v for k, v in directives_dict.items() if k not in job_parameters}
-        
-        # Update job parameters with node specifications
-        job_parameters = update_job_parameters_with_nodes(job_parameters, extra_parameters, scheduler)
-        
-        # If name is not provided, use the f"vasp{scheduler}" as the default name
+
+        job_parameters, extra_parameters = self._resolve_and_filter_parameters(directives_dict)
+        job_parameters = self._update_job_parameters(job_parameters, extra_parameters, scheduler)
         job_parameters['job_name'] = job_parameters.get('job_name', f"vasp{scheduler}")
 
-        # Initialize the dask job object and extract job header
-        job_class = job_type_from_scheduler(self.scheduler)
-        self.dask_job_object = job_class(**job_parameters)
-        self.directives = self.dask_job_object.job_header
+        self._initialize_job_object(job_parameters, scheduler)
         self.shebang = directives_dict.get('shebang', '#!/bin/bash')
         self.script = directives_dict.get('script', [])
-        self.extra_parameters = extra_parameters  # Store extra parameters
+        self.extra_parameters = extra_parameters
+
+    def _resolve_and_filter_parameters(self, directives_dict: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        job_parameters = resolve_aliases(directives_dict, JOB_PARAMETERS)
+        extra_parameters = {k: v for k, v in directives_dict.items() if k not in job_parameters}
+        return job_parameters, extra_parameters
+
+    def _update_job_parameters(self, job_parameters: Dict[str, Any], extra_parameters: Dict[str, Any], scheduler: str) -> Dict[str, Any]:
+        return update_job_parameters_with_nodes(job_parameters, extra_parameters, scheduler)
+
+    def _initialize_job_object(self, job_parameters: Dict[str, Any], scheduler: str) -> None:
+        job_class = job_type_from_scheduler(scheduler)
+        self.dask_job_object = job_class(**job_parameters)
+        self.directives = self.dask_job_object.job_header
+
 
     def __str__(self) -> str:
         script_content = "\n".join(self.script)
-        return f"{self.shebang}\n{self.directives}\n{script_content}\n"
+        return f"{self.shebang}\n{self.directives}\n{script_content}"
 
     def to_file(self, filename: str) -> None:
         with open(filename, "w") as f:
