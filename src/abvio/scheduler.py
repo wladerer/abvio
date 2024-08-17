@@ -176,7 +176,7 @@ class Job(BaseModel):
 
     def __str__(self) -> str:
         script_content = "\n".join(self.script)
-        return f"{self.shebang}\n{self.directives}\n{script_content}"
+        return f"{self.shebang}\n{self.directives}\n{script_content}\n"
 
     def to_file(self, filename: str) -> None:
         with open(filename, "w") as f:
