@@ -3,7 +3,7 @@ import yaml
 import os 
 
 import abvio.check as check
-import abvio.io as io
+import abvio.aio as Io
 
 from pymatgen.core.structure import Structure
 from pathlib import Path
@@ -133,7 +133,7 @@ class TestCheckStructure(unittest.TestCase):
 #     def test_valid_input(self):
 #         """creates an Input object and validates it"""
             
-#         InputObject = io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
+#         InputObject = Io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
 #         messages = InputObject.check()
 
 

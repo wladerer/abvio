@@ -1,7 +1,7 @@
 import unittest
 import yaml
 import os
-import abvio.io as io
+import abvio.aio as Io
 
 from pathlib import Path
 from pymatgen.core import Structure
@@ -24,7 +24,7 @@ class TestLoadFunction(unittest.TestCase):
         invalid_file = os.path.join(files_dir, "invalid.yaml")
 
         with self.assertRaises(yaml.scanner.ScannerError):
-            io.load_abvio_yaml(invalid_file)
+            Io.load_abvio_yaml(invalid_file)
 
     def test_load_invalid_yaml(self):
         """Test if load can read an invalid yaml file"""
@@ -32,7 +32,7 @@ class TestLoadFunction(unittest.TestCase):
         invalid_file = os.path.join(files_dir, "invalid.yaml")
 
         with self.assertRaises(yaml.YAMLError):
-            io.load_abvio_yaml(invalid_file)
+            Io.load_abvio_yaml(invalid_file)
 
 
 class TestCreateInput(unittest.TestCase):
@@ -41,13 +41,13 @@ class TestCreateInput(unittest.TestCase):
     def test_Input_from_file(self):
         """Tests if the input class can create a valid VASP input set"""
 
-        InputObject = io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
-        self.assertIsInstance(InputObject, io.Input)
+        InputObject = Io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
+        self.assertIsInstance(InputObject, Io.Input)
 
     def test_kpoints_method(self):
         """Tests if the kpoints method returns a Kpoints object"""
 
-        InputObject = io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
+        InputObject = Io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
         kpoints = InputObject.kpoints
         self.assertIsInstance(kpoints, Kpoints)
 
@@ -69,7 +69,7 @@ class TestCreateInput(unittest.TestCase):
                 F: 0.6
         """
 
-        InputObject = io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
+        InputObject = Io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
         incar = InputObject.incar
         self.assertIsInstance(incar, Incar)
 
@@ -83,14 +83,14 @@ class TestCreateInput(unittest.TestCase):
     def test_structure_method(self):
         """Tests if the structure method returns a Structure object"""
 
-        InputObject = io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
+        InputObject = Io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
         structure = InputObject.structure
         self.assertIsInstance(structure, Structure)
 
     def test_write_method(self):
         """Tests if the write method writes the input files to the directory"""
 
-        InputObject = io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
+        InputObject = Io.Input.from_file(os.path.join(files_dir, "valid.yaml"))
         InputObject.write_inputs("/tmp")
 
         self.assertTrue(os.path.exists("/tmp/POSCAR"))
@@ -115,7 +115,7 @@ class TestSiBandStructure(unittest.TestCase):
 
         si_band_dir = os.path.join(vaspset_dir, "band")
         input_file = os.path.join(si_band_dir, "equivalent.yaml")
-        InputObject = io.Input.from_file(input_file)
+        InputObject = Io.Input.from_file(input_file)
 
         expected_incar = Incar.from_file(os.path.join(si_band_dir, "INCAR"))
 
@@ -126,7 +126,7 @@ class TestSiBandStructure(unittest.TestCase):
 
         si_band_dir = os.path.join(vaspset_dir, "band")
         input_file = os.path.join(si_band_dir, "equivalent.yaml")
-        InputObject = io.Input.from_file(input_file)
+        InputObject = Io.Input.from_file(input_file)
 
         expected_kpoints = Kpoints.from_file(os.path.join(si_band_dir, "KPOINTS"))
 
@@ -137,7 +137,7 @@ class TestSiBandStructure(unittest.TestCase):
 
         si_band_dir = os.path.join(vaspset_dir, "band")
         input_file = os.path.join(si_band_dir, "equivalent.yaml")
-        InputObject = io.Input.from_file(input_file)
+        InputObject = Io.Input.from_file(input_file)
 
         expected_structure = Poscar.from_file(
             os.path.join(si_band_dir, "POSCAR")
@@ -156,7 +156,7 @@ class TestPerovskiteSet(unittest.TestCase):
 
         perovskite_dir = os.path.join(vaspset_dir, "perovskite")
         input_file = os.path.join(perovskite_dir, "equivalent.yaml")
-        InputObject = io.Input.from_file(input_file)
+        InputObject = Io.Input.from_file(input_file)
 
         expected_incar = Incar.from_file(os.path.join(perovskite_dir, "INCAR"))
 
@@ -170,7 +170,7 @@ class TestPerovskiteSet(unittest.TestCase):
 
         perovskite_dir = os.path.join(vaspset_dir, "perovskite")
         input_file = os.path.join(perovskite_dir, "equivalent.yaml")
-        InputObject = io.Input.from_file(input_file)
+        InputObject = Io.Input.from_file(input_file)
 
         expected_kpoints = Kpoints.from_file(os.path.join(perovskite_dir, "KPOINTS"))
 
@@ -181,7 +181,7 @@ class TestPerovskiteSet(unittest.TestCase):
 
         perovskite_dir = os.path.join(vaspset_dir, "perovskite")
         input_file = os.path.join(perovskite_dir, "equivalent.yaml")
-        InputObject = io.Input.from_file(input_file)
+        InputObject = Io.Input.from_file(input_file)
 
         expected_structure = Poscar.from_file(
             os.path.join(perovskite_dir, "POSCAR")
@@ -196,7 +196,7 @@ class TestPerovskiteSet(unittest.TestCase):
 
         perovskite_dir = os.path.join(vaspset_dir, "perovskite")
         input_file = os.path.join(perovskite_dir, "equivalent.yaml")
-        InputObject = io.Input.from_file(input_file)
+        InputObject = Io.Input.from_file(input_file)
 
         job = InputObject.job
         self.assertEqual(job.scheduler, 'slurm')
@@ -223,7 +223,7 @@ class TestPerovskiteSet(unittest.TestCase):
 
         perovskite_dir = os.path.join(vaspset_dir, "perovskite")
         input_file = os.path.join(perovskite_dir, "equivalent_pbs.yaml")
-        InputObject = io.Input.from_file(input_file)
+        InputObject = Io.Input.from_file(input_file)
 
         job = InputObject.job
         job.scheduler = 'pbs'

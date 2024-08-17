@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 import abvio.structure as st
-import abvio.io as io
+import abvio.aio as Io
 
 from pymatgen.io.vasp import Poscar
 from pymatgen.core import Structure, Lattice
@@ -135,7 +135,7 @@ class TestManualStructure(unittest.TestCase):
 
     def test_manual_structure_from_file(self):
         filepath = os.path.join(files_dir, "lattice_list.yaml")
-        input_dict = io.load_abvio_yaml(filepath)["structure"]
+        input_dict = Io.load_abvio_yaml(filepath)["structure"]
 
         model = st.ManualStructure.validate(input_dict)
         structure = model.structure
@@ -144,10 +144,10 @@ class TestManualStructure(unittest.TestCase):
 
 
 class TestPrototypeStructure(unittest.TestCase):
-    perovskite_dict = io.load_abvio_yaml(os.path.join(files_dir, "prototype_perovskite.yaml"))[
+    perovskite_dict = Io.load_abvio_yaml(os.path.join(files_dir, "prototype_perovskite.yaml"))[
         "structure"
     ]
-    fluorite_dict = io.load_abvio_yaml(os.path.join(files_dir, "prototype_fluorite.yaml"))[
+    fluorite_dict = Io.load_abvio_yaml(os.path.join(files_dir, "prototype_fluorite.yaml"))[
         "structure"
     ]
 

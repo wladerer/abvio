@@ -1,5 +1,4 @@
 import warnings
-import yaml
 import os
 
 from pathlib import Path
@@ -12,6 +11,7 @@ from abvio.kpoints import KpointsMeta
 from abvio.incar import IncarModel
 from abvio.scheduler import Job
 
+import yaml
 
 def load_abvio_yaml(filepath: Path | str) -> dict:
     """Loads the abvio yaml file into a dictionary
