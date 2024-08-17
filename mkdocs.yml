@@ -29,6 +29,7 @@ nav:
 - About: index.md
 - Quickstart: quickstart.md
 - File Format: format.md
+- PBS and SLURM: jobs.md
 
 
 markdown_extensions:
