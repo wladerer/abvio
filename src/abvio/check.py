@@ -75,11 +75,10 @@ class CheckIncar:
         )
 
         for tag, value in self.incar_dict.items():
-            if tag in incar_tags:
-                if "depends" in incar_tags[tag]:
-                    for dep_tag in incar_tags[tag]["depends"]:
-                        if dep_tag.lower() not in self.incar_dict:
-                            self.messages.append(f"Tag {tag} requires {dep_tag}")
+            if tag in incar_tags and "depends" in incar_tags[tag]:
+                for dep_tag in incar_tags[tag]["depends"]:
+                    if dep_tag.lower() not in self.incar_dict:
+                        self.messages.append(f"Tag {tag} requires {dep_tag}")
 
         return self.messages
 

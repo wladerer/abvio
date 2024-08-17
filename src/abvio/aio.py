@@ -45,8 +45,7 @@ def format_structure_output(structure: Structure) -> dict:
         dict: The dictionary representation of the structure
     """
 
-    # structure dict only needs lattice: a,b,c, alpha, beta, gamma ; species: list of species ; coords: list of coordinates
-    structure_dict = {
+    return {
         "mode": "manual",
         "lattice": {
             "a": structure.lattice.a,
@@ -59,8 +58,6 @@ def format_structure_output(structure: Structure) -> dict:
         "species": [str(specie) for specie in structure.species],
         "coords": structure.cart_coords.tolist(),
     }
-
-    return structure_dict
 
 
 def convert_pmg_kpoints_name_to_abvio_name(pmg_name: str) -> str:
@@ -80,7 +77,7 @@ def convert_pmg_kpoints_name_to_abvio_name(pmg_name: str) -> str:
         "Automatic": "surface",
     }
 
-    return kpoints_name_map[str(pmg_name)]
+    return kpoints_name_map[pmg_name]
 
 
 def format_kpoints_output(kpoints: Kpoints) -> dict:
@@ -131,9 +128,7 @@ class Input:
             )
 
         structure_model = StructureMeta.from_dict(self.structure_dict)
-        structure = structure_model.structure
-
-        return structure
+        return structure_model.structure
 
     @property
     def incar(self) -> Incar:
@@ -143,9 +138,7 @@ class Input:
             )
 
         incar_model = IncarModel(incar_dict=self.incar_dict)
-        incar = incar_model.incar(self.structure)
-
-        return incar
+        return incar_model.incar(self.structure)
 
     @property
     def kpoints(self) -> Kpoints:
@@ -156,12 +149,11 @@ class Input:
 
         kpoints_model = KpointsMeta.from_dict(self.kpoints_dict)
 
-        if kpoints_model.requires_structure:
-            kpoints = kpoints_model.kpoints(self.structure)
-        else:
-            kpoints = kpoints_model.kpoints()
-
-        return kpoints
+        return (
+            kpoints_model.kpoints(self.structure)
+            if kpoints_model.requires_structure
+            else kpoints_model.kpoints()
+        )
 
     @property
     def job(self) -> Job:
@@ -169,9 +161,8 @@ class Input:
             raise ValueError(
                 f"No job dictionary found in input file: keys passed are {self.input_dict.keys()}"
             )
-        
-        job = Job.from_dict(self.job_dict)
-        return job
+
+        return Job.from_dict(self.job_dict)
 
 
     @classmethod

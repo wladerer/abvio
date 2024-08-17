@@ -123,7 +123,7 @@ def structure_from_lattice(
     """Create a Poscar object from a lattice object, species list, and coordinates array"""
 
 
-    if isinstance(lattice, list) or isinstance(lattice, np.ndarray):
+    if isinstance(lattice, (list, np.ndarray)):
         lattice = Lattice(lattice)
 
     if not isinstance(lattice, Lattice):
@@ -134,9 +134,7 @@ def structure_from_lattice(
             f"Number of species {len(species)} and coordinates {len(coords)} must be the same"
         )
 
-    structure = Structure(lattice, species, coords, coords_are_cartesian=cartesian)
-
-    return structure
+    return Structure(lattice, species, coords, coords_are_cartesian=cartesian)
 
 
 def structure_from_prototype(
@@ -155,7 +153,7 @@ def structure_from_prototype(
             "gamma": lattice.gamma,
         }
 
-    if isinstance(lattice, list) or isinstance(lattice, np.ndarray):
+    if isinstance(lattice, (list, np.ndarray)):
         lattice = Lattice(lattice)
         lattice = {
             "a": lattice.a,
@@ -166,9 +164,7 @@ def structure_from_prototype(
             "gamma": lattice.gamma,
         }
 
-    structure = Structure.from_prototype(prototype, species, **lattice)
-
-    return structure
+    return Structure.from_prototype(prototype, species, **lattice)
 
 
 def structure_from_file(file: Path | str) -> Structure:
@@ -273,7 +269,7 @@ class ManualStructure(BaseStructure):
 
     @field_validator("lattice")
     def validate_lattice(cls, lattice):
-        if isinstance(lattice, list) or isinstance(lattice, np.ndarray):
+        if isinstance(lattice, (list, np.ndarray)):
             lattice = Lattice(lattice)
         elif isinstance(lattice, dict):
             lattice = Lattice.from_dict(lattice)
@@ -413,6 +409,4 @@ def structure_model_from_input_dict(structure_dictionary: dict) -> Structure:
     }
 
     BaseStructureModel = mode_model_map.get(base_model.mode)
-    StructureModel = BaseStructureModel.validate(structure_dictionary)
-
-    return StructureModel
+    return BaseStructureModel.validate(structure_dictionary)

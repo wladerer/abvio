@@ -131,9 +131,7 @@ class GammaKpoints(BaseKpoints):
     shift: IntArray3D = [0, 0, 0]
 
     def kpoints(self):
-        kpoints = Kpoints.gamma_automatic(self.spacing, self.shift)
-
-        return kpoints
+        return Kpoints.gamma_automatic(self.spacing, self.shift)
 
 
 class MonkhorstKpoints(BaseKpoints):
@@ -153,9 +151,7 @@ class MonkhorstKpoints(BaseKpoints):
     shift: IntArray3D = [0, 0, 0]
 
     def kpoints(self):
-        kpoints = Kpoints.monkhorst_automatic(self.spacing, self.shift)
-
-        return kpoints
+        return Kpoints.monkhorst_automatic(self.spacing, self.shift)
 
 
 class SurfaceKpoints(BaseKpoints):
@@ -182,9 +178,7 @@ class SurfaceKpoints(BaseKpoints):
             structure (Structure): The structure to generate kpoints for
         """
 
-        kpoints = Kpoints.automatic_density(structure=structure, kppa=self.spacing)
-
-        return kpoints
+        return Kpoints.automatic_density(structure=structure, kppa=self.spacing)
 
 
 class LineKpoints(BaseKpoints):
@@ -281,9 +275,7 @@ class LineKpoints(BaseKpoints):
         kpoints_str = f"{header}\n{path_string}"
 
 
-        kpoints = Kpoints.from_str(kpoints_str)
-
-        return kpoints
+        return Kpoints.from_str(kpoints_str)
 
 
 class AutoLineKpoints(BaseKpoints):
@@ -301,9 +293,7 @@ class AutoLineKpoints(BaseKpoints):
         """
 
         kpath = HighSymmKpath(structure)
-        kpoints = Kpoints.automatic_linemode(self.spacing, kpath)
-
-        return kpoints
+        return Kpoints.automatic_linemode(self.spacing, kpath)
 
 
 def kpoints_model_from_dictionary(kpoints_dictionary: dict) -> Kpoints:
@@ -320,9 +310,7 @@ def kpoints_model_from_dictionary(kpoints_dictionary: dict) -> Kpoints:
     }
 
     BaseKpointsModel = mode_model_map.get(base_model.mode)
-    KpointsModel = BaseKpointsModel.validate(kpoints_dictionary)
-
-    return KpointsModel
+    return BaseKpointsModel.validate(kpoints_dictionary)
 
 
 def kpoints_from_dictionary(

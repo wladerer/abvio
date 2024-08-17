@@ -99,10 +99,7 @@ def is_range_dict(range_dict: dict) -> bool:
         bool indicating if dictionary is a range dictionary
     """
 
-    if "start" in range_dict and "stop" in range_dict and "value" in range_dict:
-        return True
-    else:
-        return False
+    return "start" in range_dict and "stop" in range_dict and "value" in range_dict
 
 
 def is_range_list(range_list: list) -> bool:
@@ -117,12 +114,9 @@ def is_range_list(range_list: list) -> bool:
         bool indicating if list contains range dictionaries
     """
 
-    if isinstance(range_list, list) and all(
-        [is_range_dict(range_dict) for range_dict in range_list]
-    ):
-        return True
-
-    return False
+    return isinstance(range_list, list) and all(
+        is_range_dict(range_dict) for range_dict in range_list
+    )
 
 
 def is_species_dict(species_dict: dict) -> bool:
@@ -145,12 +139,10 @@ def is_species_dict(species_dict: dict) -> bool:
     if not isinstance(species_dict, dict):
         return False
 
-    if all(
-        [isinstance(value, (int, float, list)) for value in species_dict.values()]
-    ) and all([isinstance(key, str) for key in species_dict.keys()]):
-        return True
-    else:
-        return False
+    return all(
+        isinstance(value, (int, float, list))
+        for value in species_dict.values()
+    ) and all(isinstance(key, str) for key in species_dict)
 
 
 def is_index_dict(index_dict: dict) -> bool:
@@ -174,12 +166,9 @@ def is_index_dict(index_dict: dict) -> bool:
     if not isinstance(index_dict, dict):
         return False
 
-    if all(
-        [isinstance(value, (int, float, list)) for value in index_dict.values()]
-    ) and all([isinstance(key, int) for key in index_dict.keys()]):
-        return True
-    else:
-        return False
+    return all(
+        isinstance(value, (int, float, list)) for value in index_dict.values()
+    ) and all(isinstance(key, int) for key in index_dict)
 
 
 def is_collinear(magmom_entry: list | dict) -> bool:
@@ -196,31 +185,31 @@ def is_collinear(magmom_entry: list | dict) -> bool:
     # checks if magmom_entry is an index, range, or species dictionary
     if is_index_dict(magmom_entry) or is_species_dict(magmom_entry):
         # check if values are floats or lists of floats
-        if all([isinstance(value, (float, int)) for value in magmom_entry.values()]):
+        if all(
+            isinstance(value, (float, int)) for value in magmom_entry.values()
+        ):
             return True
-        if all([isinstance(value, list) for value in magmom_entry.values()]):
+        if all(isinstance(value, list) for value in magmom_entry.values()):
             return False
         else:
             raise ValueError(f"Magnetic moments is improperly formatted {magmom_entry}")
 
-    if is_range_list(magmom_entry):
-        # select the "value" key of each entry in the list and check if it is a float or list of floats
-        if all(
-            [
-                isinstance(range_dict["value"], (float, int))
-                for range_dict in magmom_entry
-            ]
-        ):
-            return True
-        if all([isinstance(range_dict["value"], list) for range_dict in magmom_entry]):
-            return False
-        else:
-            raise ValueError(
-                f"Magnetic moments is improperly formatted: {magmom_entry}"
-            )
-
-    else:
+    if not is_range_list(magmom_entry):
         raise ValueError(f"Magnetic moments is improperly formatted: {magmom_entry}")
+        # select the "value" key of each entry in the list and check if it is a float or list of floats
+    if all(
+        isinstance(range_dict["value"], (float, int))
+        for range_dict in magmom_entry
+    ):
+        return True
+    if all(
+        isinstance(range_dict["value"], list) for range_dict in magmom_entry
+    ):
+        return False
+    else:
+        raise ValueError(
+            f"Magnetic moments is improperly formatted: {magmom_entry}"
+        )
 
 
 def is_valid_magmom_entry(magmom_entry: list | dict) -> bool:
@@ -233,14 +222,13 @@ def is_valid_magmom_entry(magmom_entry: list | dict) -> bool:
     """
 
     # checks if magmom_entry is an index, range, or species dictionary
-    if (
-        is_index_dict(magmom_entry)
-        or is_species_dict(magmom_entry)
-        or is_range_list(magmom_entry)
-    ):
-        return True
-    else:
-        return False
+    return bool(
+        (
+            is_index_dict(magmom_entry)
+            or is_species_dict(magmom_entry)
+            or is_range_list(magmom_entry)
+        )
+    )
 
 
 def site_properties_from_structure(
@@ -257,9 +245,7 @@ def site_properties_from_structure(
     """
 
     sites = structure.sites
-    properties = [site.properties.get(property_name, default) for site in sites]
-
-    return properties
+    return [site.properties.get(property_name, default) for site in sites]
 
 
 def format_magnetic_moments(
@@ -297,9 +283,7 @@ def format_magnetic_moments(
                 structure, slice(start, stop, step), "magmom", value
             )
 
-    magmoms = site_properties_from_structure(structure, "magmom", missing)
-
-    return magmoms
+    return site_properties_from_structure(structure, "magmom", missing)
 
 
 def format_incar_dict(
@@ -354,12 +338,11 @@ class IncarModel(BaseModel):
             raise ValueError("incar_dict must be a dictionary")
 
         try:
-            if "magmom" in incar_dict:
-                if not is_valid_magmom_entry(incar_dict["magmom"]):
-                    raise ValueError(f"Invalid magmom entry {incar_dict['magmom'] }")
+            if "magmom" in incar_dict and not is_valid_magmom_entry(incar_dict["magmom"]):
+                raise ValueError(f"Invalid magmom entry {incar_dict['magmom'] }")
             Incar(incar_dict)
         except Exception as e:
-            raise ValueError(f"Invalid INCAR dictionary: {e}")
+            raise ValueError(f"Invalid INCAR dictionary: {e}") from e
 
         return incar_dict
 
@@ -371,9 +354,7 @@ class IncarModel(BaseModel):
         """
 
         formatted_incar_dictionary = format_incar_dict(self.incar_dict, structure)
-        incar = Incar(formatted_incar_dictionary)
-
-        return incar
+        return Incar(formatted_incar_dictionary)
     
     def check(self, structure: Structure = None):
         """Checks if the INCAR has any common errors"""
