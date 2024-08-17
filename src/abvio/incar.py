@@ -1,15 +1,8 @@
-import logging
 
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Incar
 
 from pydantic import BaseModel, field_validator
-
-log = logging.getLogger(__name__)
-log_format = "%(asctime)s - %(levelname)s - %(message)s"
-date_format = "%Y-%m-%d"
-
-logging.basicConfig(level=logging.INFO, format=log_format, datefmt=date_format)
 
 
 def assign_site_property_by_species(
@@ -109,7 +102,6 @@ def is_range_dict(range_dict: dict) -> bool:
     if "start" in range_dict and "stop" in range_dict and "value" in range_dict:
         return True
     else:
-        log.error(f"Range dictionary is improperly formatted: {range_dict}")
         return False
 
 
@@ -130,7 +122,6 @@ def is_range_list(range_list: list) -> bool:
     ):
         return True
 
-    log.debug(f"Not a range list: {range_list}")
     return False
 
 

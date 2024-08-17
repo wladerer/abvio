@@ -1,4 +1,3 @@
-import logging
 import warnings
 import yaml
 import os
@@ -13,14 +12,8 @@ from abvio.kpoints import KpointsMeta
 from abvio.incar import IncarModel
 
 
-log = logging.getLogger(__name__)
-log_format = "%(asctime)s - %(levelname)s - %(message)s"
-date_format = "%Y-%m-%d"
 
-logging.basicConfig(level=logging.INFO, format=log_format, datefmt=date_format)
-
-
-def load(filepath: Path | str) -> dict:
+def load_abvio_yaml(filepath: Path | str) -> dict:
     """Loads the abvio yaml file into a dictionary
 
     Args:
@@ -30,10 +23,8 @@ def load(filepath: Path | str) -> dict:
         dict: The dictionary containing vasp input information
     """
 
-    log.debug(f"Loading file: {filepath}")
 
     if not os.path.exists(filepath):
-        log.error(f"File does not exist: {filepath}")
         raise FileNotFoundError(f"File does not exist: {filepath}")
 
     with open(filepath, "r") as f:
@@ -182,7 +173,7 @@ class Input:
             Input: The Input object
         """
 
-        input_dict = load(filepath)
+        input_dict = load_abvio_yaml(filepath)
         return cls(input_dict)
 
     def write_inputs(self, directory: Path | str):

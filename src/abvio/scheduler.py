@@ -27,33 +27,19 @@ def remove_dask_command(dask_jobscript: str) -> str:
 
     return "\n".join(script)
 
+
 class Job:
-
     def __init__(self, scheduler: str, directives_dict: dict):
-
         self.scheduler = scheduler
         self.dask_job_object = job_type_from_scheduler(scheduler)(**directives_dict)
-        self.directives = self.dask_job_object.job_header
-
+        self.directives: str = self.dask_job_object.job_header
+        self.shebang: str = "#!/bin/bash"
 
     def __str__(self):
-        return self.directives
+        return '\n'.join([self.shebang, self.directives])
 
-    
     def to_file(self, filename: str):
         with open(filename, "w") as f:
             f.write(str(self))
-
-
-
-slurm_job = Job("slurm", {"queue": "batch", "cores": 4, "memory": "16GB", "walltime": "00:30:00"})
-
-print(slurm_job)
-
-        
-
-        
-
-
 
     

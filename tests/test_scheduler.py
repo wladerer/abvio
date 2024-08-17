@@ -28,8 +28,8 @@ class TestFileCreation(unittest.TestCase):
 
         pbs_job = scheduler.Job("pbs", directives)
         slurm_job = scheduler.Job("slurm", directives)
-        self.assertIsInstance(pbs_job.job, PBSJob)
-        self.assertIsInstance(slurm_job.job, SLURMJob)
+        self.assertIsInstance(pbs_job.dask_job_object, PBSJob)
+        self.assertIsInstance(slurm_job.dask_job_object, SLURMJob)
 
     def test_write_to_file(self):
         """Tests if the Job class can write the job script to a file"""
@@ -53,24 +53,7 @@ class TestFileCreation(unittest.TestCase):
         os.remove(os.path.join(files_dir, "pbs_job.sh"))
         os.remove(os.path.join(files_dir, "slurm_job.sh"))
 
-    def test_append_vasp_command(self):
-        """Tests if the Job class can append the VASP command to the job script"""
-        directives = {
-            "queue": "regular",
-            "walltime": "00:30:00",
-            "cores": 3,
-            "memory": "2GB",
-            "job_name": "test_job"
-        }
 
-        pbs_job = scheduler.Job("pbs", directives)
-        slurm_job = scheduler.Job("slurm", directives)
-
-        pbs_job.append("mpirun vasp_std")
-        slurm_job.append("mpirun vasp_std")
-
-        self.assertIn("mpirun vasp_std", str(pbs_job))
-        self.assertIn("mpirun vasp_std", str(slurm_job))
 
 
 

@@ -1,4 +1,3 @@
-import logging
 import collections
 
 from pymatgen.core import Structure
@@ -7,12 +6,6 @@ from pymatgen.symmetry.bandstructure import HighSymmKpath
 from pydantic import BaseModel, field_validator
 from pydantic._internal._model_construction import ModelMetaclass
 from typing import List, Union, Tuple
-
-log = logging.getLogger(__name__)
-log_format = "%(asctime)s - %(levelname)s - %(message)s"
-date_format = "%Y-%m-%d"
-
-logging.basicConfig(level=logging.DEBUG, format=log_format, datefmt=date_format)
 
 
 Number = Union[int, float]
@@ -87,7 +80,6 @@ class BaseKpoints(BaseModel, metaclass=CombinedMeta):
         elif mode.lower() == "autoline":
             return "autoline"
         else:
-            log.error(f"Invalid mode: {mode}")
             raise ValueError(f"Invalid mode: {mode}")
 
     @field_validator("spacing")
@@ -104,23 +96,19 @@ class BaseKpoints(BaseModel, metaclass=CombinedMeta):
 
         if isinstance(spacing, (int, float)):
             if spacing < 0:
-                log.error(f"Spacing must be a non-negative integer: {spacing}")
                 raise ValueError(f"Spacing must be a non-negative integer: {spacing}")
 
         elif isinstance(spacing, collections.abc.Iterable):
             if len(spacing) != 3:
-                log.error(f"Spacing must have 3 elements: {spacing}")
                 raise ValueError(f"Spacing must have 3 elements: {spacing}")
 
             for s in spacing:
                 if s < 0:
-                    log.error(f"Spacings must be all non-negative integer: {spacing}")
                     raise ValueError(
                         f"Spacings must be all non-negative integer: {spacing}"
                     )
 
         else:
-            log.error(f"Invalid spacing: {spacing}")
             raise ValueError(f"Invalid spacing: {spacing}")
 
         return spacing
@@ -232,12 +220,10 @@ class LineKpoints(BaseKpoints):
             Matrix3D: The paths if they are valid
         """
         if len(paths) < 2:
-            log.error(f"Invalid paths: {paths}")
             raise ValueError(f"Invalid paths: {paths}")
 
         for path in paths:
             if len(path) != 3:
-                log.error(f"Invalid path: {path}")
                 raise ValueError(f"Invalid path: {path}")
 
         return paths
@@ -260,12 +246,10 @@ class LineKpoints(BaseKpoints):
         """
 
         if len(labels) < 2:
-            log.error(f"Number of labels must be greater than 1: {labels}")
             raise ValueError(f"Number of labels must be greater than 1: {labels}")
 
         for label in labels:
             if not isinstance(label, str):
-                log.error(f"Invalid label: {label}")
                 raise ValueError(f"Invalid label: {label}")
 
         return labels
@@ -281,7 +265,6 @@ class LineKpoints(BaseKpoints):
         """
 
         if len(self.paths) != len(self.labels):
-            log.error(f"Invalid paths and labels: {self.paths}, {self.labels}")
             raise ValueError(
                 f"Dimensions of labels and paths do not match: {self.paths}, {self.labels}"
             )
@@ -297,7 +280,6 @@ class LineKpoints(BaseKpoints):
         )
         kpoints_str = f"{header}\n{path_string}"
 
-        log.debug(f"Kpoints string: {kpoints_str}")
 
         kpoints = Kpoints.from_str(kpoints_str)
 
@@ -352,9 +334,6 @@ def kpoints_from_dictionary(
 
     if KpointsModel.requires_structure:
         if structure is None:
-            log.error(
-                f"Kpoints model requires a structure but give type {type(structure)}"
-            )
             raise ValueError("Kpoints model requires a structure")
 
         kpoints = KpointsModel.kpoints(structure)

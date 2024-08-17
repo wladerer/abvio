@@ -1,16 +1,12 @@
 import argparse
 import sys
 import yaml
-import logging
 import os
 
 from pydantic import ValidationError
 from abvio.io import Input
 from rich.console import Console
 from rich.table import Table
-
-# set logging level to silent
-logging.basicConfig(level=logging.ERROR)
 
 
 def check_input_file(input_file):
@@ -96,8 +92,6 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
 
     user_input = args.input
     output_path = args.output
@@ -110,7 +104,6 @@ def main():
 
     if args.output and not args.convert:
         if not os.path.exists(output_path):
-            logging.error(f"Output path '{output_path}' does not exist.")
             sys.exit(1)
         input_object = Input.from_file(user_input)
         input_object.write_inputs(output_path)

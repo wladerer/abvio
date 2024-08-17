@@ -6,14 +6,8 @@ from typing import List, Union, Tuple
 from pathlib import Path
 
 import numpy as np
-import logging
 import os
 
-log = logging.getLogger(__name__)
-log_format = "%(asctime)s - %(levelname)s - %(message)s"
-date_format = "%Y-%m-%d"
-
-logging.basicConfig(level=logging.INFO, format=log_format, datefmt=date_format)
 
 manual_set = ["lattice", "species", "coords"]
 external_set = ["file", "string", "code"]
@@ -33,7 +27,6 @@ def is_valid_poscar_file(filepath: Path | str) -> bool:
         bool: True if file is a valid POSCAR file
     """
 
-    log.debug(f"Checking if file is a valid POSCAR file: {filepath}")
 
     try:
         Poscar.from_file(filepath)
@@ -52,13 +45,11 @@ def is_valid_poscar_string(poscar_string: str) -> bool:
         bool: True if string is a valid POSCAR string
     """
 
-    log.debug("Checking if string is a valid POSCAR string")
 
     try:
         Poscar.from_str(poscar_string)
         return True
     except Exception as e:
-        log.error(f"Invalid POSCAR string: {e}")
         return False
 
 
@@ -76,26 +67,17 @@ def format_species(species: list[dict] | list[str]) -> list[str]:
         list: The formatted list of species
     """
 
-    log.debug("Formatting species list")
-    log.debug(f"Species is of type: {type(species)}")
 
     if not isinstance(species, list):
-        log.error(f"Species is of type: {type(species)}")
         raise ValueError("Species must be a list")
 
     if isinstance(species[0], dict):
         # check if keys are strings and values are integers
         for species_dict in species:
             if not all(isinstance(key, str) for key in species_dict.keys()):
-                log.error(
-                    f"Keys in species dictionary are not strings: {species_dict.keys()}"
-                )
                 raise ValueError("Keys in species dictionary must be strings")
 
             if not all(isinstance(value, int) for value in species_dict.values()):
-                log.error(
-                    f"Values in species dictionary are not integers: {species_dict.values()}"
-                )
                 raise ValueError("Values in species dictionary must be integers")
 
     if isinstance(species[0], dict):
@@ -110,7 +92,6 @@ def format_species(species: list[dict] | list[str]) -> list[str]:
         return species
 
     else:
-        log.error(f"Species is of type: {type(species)}")
         raise ValueError("Species must be a list of dictionaries or a list of strings")
 
 
@@ -123,7 +104,6 @@ def structure_from_mpi_code(mpcode: str, is_conventional: bool = True):
     api_key = os.getenv("MP_API_KEY")
 
     with MPRester(api_key, mute_progress_bars=True) as mpr:
-        log.debug("Connected to materials project API")
         structure = mpr.get_structure_by_material_id(
             mpcode, conventional_unit_cell=is_conventional
         )
@@ -142,26 +122,14 @@ def structure_from_lattice(
 ) -> Structure:
     """Create a Poscar object from a lattice object, species list, and coordinates array"""
 
-    log_data = {
-        "Lattice": lattice,
-        "Species": species,
-        "Coordinates": coords,
-        "Cartesian": cartesian,
-    }
-
-    log.debug(f"Creating structure from lattice array: {log_data}")
 
     if isinstance(lattice, list) or isinstance(lattice, np.ndarray):
         lattice = Lattice(lattice)
 
     if not isinstance(lattice, Lattice):
-        log.error(f"Expected array or Lattice object, got {type(lattice)}")
         raise ValueError("Lattice must be a Lattice object or array")
 
     if len(coords) != len(species):
-        log.error(
-            f"Species  ({len(species)}) and coordinates ({len(coords)}) are not the same length"
-        )
         raise ValueError(
             f"Number of species {len(species)} and coordinates {len(coords)} must be the same"
         )
@@ -176,14 +144,6 @@ def structure_from_prototype(
 ) -> Structure:
     """Create a structure from a prototype, lattice object, species list, and coordinates array"""
 
-    log_dict = {
-        "Prototype": prototype,
-        "Species": species,
-        "Lattice": lattice,
-        "Cartesian": cartesian,
-    }
-
-    log.debug(f"Creating structure from prototype: {log_dict}")
 
     if isinstance(lattice, Lattice):
         lattice = {
@@ -223,7 +183,6 @@ def structure_from_file(file: Path | str) -> Structure:
             Structure: The pymatgen Structure object created from the file
     """
 
-    log.debug(f"Creating structure from file: {file}")
 
     return Structure.from_file(file)
 
@@ -240,7 +199,6 @@ def structure_from_string(string: str) -> Structure:
             Structure: The pymatgen Structure object created from the string
     """
 
-    log.debug(f"Creating structure from string: {string}")
 
     return Poscar.from_str(string).structure
 
@@ -295,7 +253,6 @@ class BaseStructure(BaseModel, metaclass=CombinedMeta):
         elif mode.lower() == "manual":
             return "manual"
         else:
-            log.error(f"Invalid mode: {mode}")
             raise ValueError(f"Invalid mode: {mode}")
 
 
@@ -417,9 +374,6 @@ class ExternalStructure(BaseStructure):
         """Checks to see if file, string, or code is provided and returns a pymatgen Structure object"""
 
         if self.file and self.string and self.code:
-            log.debug(
-                f"was given file: {self.file}, string: {self.string}, and code: {self.code}"
-            )
             raise ValueError("Must provide only one of file, string, or code")
 
         elif self.file:
@@ -449,7 +403,6 @@ def structure_model_from_input_dict(structure_dictionary: dict) -> Structure:
             Structure: The pymatgen Structure object created from the dictionary
     """
 
-    log.debug(f"Creating structure from input dictionary: {structure_dictionary}")
 
     base_model = BaseStructure.validate(structure_dictionary)
 
