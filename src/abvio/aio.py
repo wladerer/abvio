@@ -1,6 +1,4 @@
-import logging
 import warnings
-import yaml
 import os
 
 from pathlib import Path
@@ -8,18 +6,14 @@ from pathlib import Path
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Incar, Kpoints, Poscar
 
-from abvio.structure import structure_model_from_input_dict
-from abvio.kpoints import kpoints_model_from_dictionary
+from abvio.structure import StructureMeta
+from abvio.kpoints import KpointsMeta
 from abvio.incar import IncarModel
+from abvio.scheduler import Job
 
-log = logging.getLogger(__name__)
-log_format = "%(asctime)s - %(levelname)s - %(message)s"
-date_format = "%Y-%m-%d"
+import yaml
 
-logging.basicConfig(level=logging.INFO, format=log_format, datefmt=date_format)
-
-
-def load(filepath: Path | str) -> dict:
+def load_abvio_yaml(filepath: Path | str) -> dict:
     """Loads the abvio yaml file into a dictionary
 
     Args:
@@ -29,10 +23,8 @@ def load(filepath: Path | str) -> dict:
         dict: The dictionary containing vasp input information
     """
 
-    log.debug(f"Loading file: {filepath}")
 
     if not os.path.exists(filepath):
-        log.error(f"File does not exist: {filepath}")
         raise FileNotFoundError(f"File does not exist: {filepath}")
 
     with open(filepath, "r") as f:
@@ -53,8 +45,7 @@ def format_structure_output(structure: Structure) -> dict:
         dict: The dictionary representation of the structure
     """
 
-    #structure dict only needs lattice: a,b,c, alpha, beta, gamma ; species: list of species ; coords: list of coordinates
-    structure_dict = {
+    return {
         "mode": "manual",
         "lattice": {
             "a": structure.lattice.a,
@@ -64,14 +55,12 @@ def format_structure_output(structure: Structure) -> dict:
             "beta": structure.lattice.beta,
             "gamma": structure.lattice.gamma,
         },
-        "species": [ str(specie) for specie in structure.species ],
+        "species": [str(specie) for specie in structure.species],
         "coords": structure.cart_coords.tolist(),
     }
 
-    return structure_dict
 
-
-def conver_pmg_kpoints_name_to_abvio_name(pmg_name: str) -> str:
+def convert_pmg_kpoints_name_to_abvio_name(pmg_name: str) -> str:
     """Converts a pymatgen kpoints name to an abvio kpoints name
 
     Args:
@@ -88,7 +77,7 @@ def conver_pmg_kpoints_name_to_abvio_name(pmg_name: str) -> str:
         "Automatic": "surface",
     }
 
-    return kpoints_name_map[str(pmg_name)]
+    return kpoints_name_map[pmg_name]
 
 
 def format_kpoints_output(kpoints: Kpoints) -> dict:
@@ -103,9 +92,8 @@ def format_kpoints_output(kpoints: Kpoints) -> dict:
         dict: The dictionary representation of the kpoints
     """
 
-
     kpoints_dict = {
-        "mode": conver_pmg_kpoints_name_to_abvio_name(kpoints.style),
+        "mode": convert_pmg_kpoints_name_to_abvio_name(kpoints.style),
         "shift": [float(shift) for shift in kpoints.kpts_shift],
     }
 
@@ -124,13 +112,13 @@ def format_kpoints_output(kpoints: Kpoints) -> dict:
     return kpoints_dict
 
 
-
 class Input:
     def __init__(self, input_dictionary: dict):
         self.input_dict = input_dictionary
         self.structure_dict = input_dictionary.get("structure")
         self.incar_dict = input_dictionary.get("incar")
         self.kpoints_dict = input_dictionary.get("kpoints")
+        self.job_dict = input_dictionary.get("job")
 
     @property
     def structure(self) -> Structure:
@@ -139,10 +127,8 @@ class Input:
                 f"No structure dictionary found in input file: keys passed are {self.input_dict.keys()}"
             )
 
-        structure_model = structure_model_from_input_dict(self.structure_dict)
-        structure = structure_model.structure
-
-        return structure
+        structure_model = StructureMeta.from_dict(self.structure_dict)
+        return structure_model.structure
 
     @property
     def incar(self) -> Incar:
@@ -152,9 +138,7 @@ class Input:
             )
 
         incar_model = IncarModel(incar_dict=self.incar_dict)
-        incar = incar_model.incar(self.structure)
-
-        return incar
+        return incar_model.incar(self.structure)
 
     @property
     def kpoints(self) -> Kpoints:
@@ -163,14 +147,23 @@ class Input:
                 f"No kpoints dictionary found in input file: keys passed are {self.input_dict.keys()}"
             )
 
-        kpoints_model = kpoints_model_from_dictionary(self.kpoints_dict)
+        kpoints_model = KpointsMeta.from_dict(self.kpoints_dict)
 
-        if kpoints_model.requires_structure:
-            kpoints = kpoints_model.kpoints(self.structure)
-        else:
-            kpoints = kpoints_model.kpoints()
+        return (
+            kpoints_model.kpoints(self.structure)
+            if kpoints_model.requires_structure
+            else kpoints_model.kpoints()
+        )
 
-        return kpoints
+    @property
+    def job(self) -> Job:
+        if self.job_dict is None:
+            raise ValueError(
+                f"No job dictionary found in input file: keys passed are {self.input_dict.keys()}"
+            )
+
+        return Job.from_dict(self.job_dict)
+
 
     @classmethod
     def from_file(cls, filepath: Path | str):
@@ -183,7 +176,7 @@ class Input:
             Input: The Input object
         """
 
-        input_dict = load(filepath)
+        input_dict = load_abvio_yaml(filepath)
         return cls(input_dict)
 
     def write_inputs(self, directory: Path | str):
@@ -205,12 +198,16 @@ class Input:
                 warnings.warn(
                     "INCAR file contains unrecognized tags or values", UserWarning
                 )
-            
+
             incar.write_file(os.path.join(directory, "INCAR"))
 
         if self.kpoints_dict is not None:
             kpoints = self.kpoints
             kpoints.write_file(os.path.join(directory, "KPOINTS"))
+
+        if self.job_dict is not None:
+            job = self.job
+            job.to_file(os.path.join(directory, "submit.sh"))
 
     @classmethod
     def from_vaspset(cls, directory: Path | str) -> dict:
@@ -233,7 +230,7 @@ class Input:
         input_dict = {
             "structure": structure_dict,
             "incar": incar_dict,
-            "kpoints": kpoints_dict
+            "kpoints": kpoints_dict,
         }
 
         return cls(input_dict)
@@ -244,17 +241,21 @@ class Input:
         Args:
             filepath: The path to write the abvio yaml file to
         """
-    
-        #prepare structure and kpoints dictionaries
+
+        # prepare structure and kpoints dictionaries
         structure_dict = format_structure_output(self.structure)
         kpoints_dict = format_kpoints_output(self.kpoints)
 
-        #write the dictionary to a file
+        # write the dictionary to a file
         output_dict = {
             "structure": structure_dict,
             "incar": self.incar_dict,
-            "kpoints": kpoints_dict
+            "kpoints": kpoints_dict,
         }
 
         with open(filename, "w") as f:
             yaml.dump(output_dict, f, default_flow_style=None)
+
+
+
+

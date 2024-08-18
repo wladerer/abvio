@@ -1,29 +1,51 @@
-import logging
-
+import collections
 
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Kpoints
 from pymatgen.symmetry.bandstructure import HighSymmKpath
 from pydantic import BaseModel, field_validator
+from pydantic._internal._model_construction import ModelMetaclass
 from typing import List, Union, Tuple
-
-log = logging.getLogger(__name__)
-log_format = "%(asctime)s - %(levelname)s - %(message)s"
-date_format = "%Y-%m-%d"
-
-logging.basicConfig(level=logging.DEBUG, format=log_format, datefmt=date_format)
 
 
 Number = Union[int, float]
 IntArray3D = Tuple[int, int, int]
+IterableNumeric = Union[List[Number], Tuple[Number]]
 Matrix3D = List[Tuple[Number, Number, Number]]
 
 
-class BaseKpoints(BaseModel):
+class KpointsMeta(type):
+    _registry = {}
+
+    def __new__(cls, name, bases, class_dict):
+        new_class = super().__new__(cls, name, bases, class_dict)
+        if "mode" in class_dict:
+            KpointsMeta._registry[class_dict["mode"]] = new_class
+        return new_class
+
+    @classmethod
+    def from_dict(cls, kpoints_dictionary: dict):
+        base_model = BaseKpoints.validate(kpoints_dictionary)
+        mode = base_model.mode
+        KpointsClass = cls._registry.get(mode)
+
+        if KpointsClass is None:
+            raise ValueError(f"Unknown mode: {mode}")
+
+        return KpointsClass.validate(kpoints_dictionary)
+
+
+class CombinedMeta(KpointsMeta, ModelMetaclass):
+    """This is how we combine two metaclasses in Python"""
+
+    pass
+
+
+class BaseKpoints(BaseModel, metaclass=CombinedMeta):
     """Represents a base class for Kpoints"""
 
     mode: str
-    spacing: int | float | list
+    spacing: int | float | IntArray3D | IterableNumeric
 
     @property
     def requires_structure(self) -> bool:
@@ -58,8 +80,38 @@ class BaseKpoints(BaseModel):
         elif mode.lower() == "autoline":
             return "autoline"
         else:
-            log.error(f"Invalid mode: {mode}")
             raise ValueError(f"Invalid mode: {mode}")
+
+    @field_validator("spacing")
+    def check_spacing(cls, spacing) -> int | float:
+        """Checks if the spacing is valid
+
+        Args:
+            spacing (Any): The spacing of the kpoints
+        Returns:
+            int | float | IntArray3D | numpy.ndarray : The spacing if it is valid
+        Raises:
+            ValueError: If the spacing is invalid
+        """
+
+        if isinstance(spacing, (int, float)):
+            if spacing < 0:
+                raise ValueError(f"Spacing must be a non-negative integer: {spacing}")
+
+        elif isinstance(spacing, collections.abc.Iterable):
+            if len(spacing) != 3:
+                raise ValueError(f"Spacing must have 3 elements: {spacing}")
+
+            for s in spacing:
+                if s < 0:
+                    raise ValueError(
+                        f"Spacings must be all non-negative integer: {spacing}"
+                    )
+
+        else:
+            raise ValueError(f"Invalid spacing: {spacing}")
+
+        return spacing
 
 
 class GammaKpoints(BaseKpoints):
@@ -79,9 +131,7 @@ class GammaKpoints(BaseKpoints):
     shift: IntArray3D = [0, 0, 0]
 
     def kpoints(self):
-        kpoints = Kpoints.gamma_automatic(self.spacing, self.shift)
-
-        return kpoints
+        return Kpoints.gamma_automatic(self.spacing, self.shift)
 
 
 class MonkhorstKpoints(BaseKpoints):
@@ -101,9 +151,7 @@ class MonkhorstKpoints(BaseKpoints):
     shift: IntArray3D = [0, 0, 0]
 
     def kpoints(self):
-        kpoints = Kpoints.monkhorst_automatic(self.spacing, self.shift)
-
-        return kpoints
+        return Kpoints.monkhorst_automatic(self.spacing, self.shift)
 
 
 class SurfaceKpoints(BaseKpoints):
@@ -130,9 +178,7 @@ class SurfaceKpoints(BaseKpoints):
             structure (Structure): The structure to generate kpoints for
         """
 
-        kpoints = Kpoints.automatic_density(structure=structure, kppa=self.spacing)
-
-        return kpoints
+        return Kpoints.automatic_density(structure=structure, kppa=self.spacing)
 
 
 class LineKpoints(BaseKpoints):
@@ -153,28 +199,6 @@ class LineKpoints(BaseKpoints):
     paths: Matrix3D
     labels: List[str]
 
-    @field_validator("spacing")
-    def check_spacing(cls, spacing) -> int:
-        """Checks if the spacing is valid
-
-        Args:
-            spacing (int): The spacing of the kpoints
-
-        Returns:
-            int: The spacing if it is valid
-
-        Raises:
-            ValueError: If the spacing is invalid
-        """
-
-        if spacing < 1:
-            log.error(f"Spacing must be a non-negative integer: {spacing}")
-            raise ValueError(
-                f"Spacing must be a non-negative integer (i.e divisions per path): {spacing}"
-            )
-
-        return spacing
-
     @field_validator("paths")
     def check_paths(cls, paths) -> Matrix3D:
         """Checks if the paths are valid
@@ -190,12 +214,10 @@ class LineKpoints(BaseKpoints):
             Matrix3D: The paths if they are valid
         """
         if len(paths) < 2:
-            log.error(f"Invalid paths: {paths}")
             raise ValueError(f"Invalid paths: {paths}")
 
         for path in paths:
             if len(path) != 3:
-                log.error(f"Invalid path: {path}")
                 raise ValueError(f"Invalid path: {path}")
 
         return paths
@@ -218,12 +240,10 @@ class LineKpoints(BaseKpoints):
         """
 
         if len(labels) < 2:
-            log.error(f"Number of labels must be greater than 1: {labels}")
             raise ValueError(f"Number of labels must be greater than 1: {labels}")
 
         for label in labels:
             if not isinstance(label, str):
-                log.error(f"Invalid label: {label}")
                 raise ValueError(f"Invalid label: {label}")
 
         return labels
@@ -239,7 +259,6 @@ class LineKpoints(BaseKpoints):
         """
 
         if len(self.paths) != len(self.labels):
-            log.error(f"Invalid paths and labels: {self.paths}, {self.labels}")
             raise ValueError(
                 f"Dimensions of labels and paths do not match: {self.paths}, {self.labels}"
             )
@@ -255,38 +274,13 @@ class LineKpoints(BaseKpoints):
         )
         kpoints_str = f"{header}\n{path_string}"
 
-        log.debug(f"Kpoints string: {kpoints_str}")
 
-        kpoints = Kpoints.from_str(kpoints_str)
-
-        return kpoints
+        return Kpoints.from_str(kpoints_str)
 
 
 class AutoLineKpoints(BaseKpoints):
     mode: str = "autoline"
     spacing: int
-
-    @field_validator("spacing")
-    def check_spacing(cls, spacing) -> int:
-        """Checks if the spacing is valid
-
-        Args:
-            spacing (int): The spacing of the kpoints
-
-        Returns:
-            int: The spacing if it is valid
-
-        Raises:
-            ValueError: If the spacing is invalid
-        """
-
-        if spacing < 1:
-            log.error(f"Spacing must be a non-negative integer: {spacing}")
-            raise ValueError(
-                f"Spacing must be a non-negative integer (i.e divisions per path): {spacing}"
-            )
-
-        return spacing
 
     def kpoints(self, structure: Structure):
         """Automatically generates line mode kpoints
@@ -299,9 +293,7 @@ class AutoLineKpoints(BaseKpoints):
         """
 
         kpath = HighSymmKpath(structure)
-        kpoints = Kpoints.automatic_linemode(self.spacing, kpath)
-
-        return kpoints
+        return Kpoints.automatic_linemode(self.spacing, kpath)
 
 
 def kpoints_model_from_dictionary(kpoints_dictionary: dict) -> Kpoints:
@@ -318,9 +310,7 @@ def kpoints_model_from_dictionary(kpoints_dictionary: dict) -> Kpoints:
     }
 
     BaseKpointsModel = mode_model_map.get(base_model.mode)
-    KpointsModel = BaseKpointsModel.validate(kpoints_dictionary)
-
-    return KpointsModel
+    return BaseKpointsModel.validate(kpoints_dictionary)
 
 
 def kpoints_from_dictionary(
@@ -332,9 +322,6 @@ def kpoints_from_dictionary(
 
     if KpointsModel.requires_structure:
         if structure is None:
-            log.error(
-                f"Kpoints model requires a structure but give type {type(structure)}"
-            )
             raise ValueError("Kpoints model requires a structure")
 
         kpoints = KpointsModel.kpoints(structure)
