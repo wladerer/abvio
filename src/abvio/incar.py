@@ -2,7 +2,7 @@
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Incar
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 
 
 def assign_site_property_by_species(
@@ -321,7 +321,7 @@ class IncarModel(BaseModel):
     3. uses pymatgen to validate the incar dictionary
     """
 
-    incar_dict: dict
+    incar_dict: dict = Field(..., description="dictionary containing INCAR parameters")
 
     @field_validator("incar_dict")
     def validate_incar_dict(cls, incar_dict: dict):
