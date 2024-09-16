@@ -3,3 +3,5 @@ pymatgen
 mp_api
 pydantic
 rich
+dask_jobqueue
+pyyaml

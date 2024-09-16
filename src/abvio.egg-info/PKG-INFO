@@ -16,6 +16,8 @@ Requires-Dist: pymatgen
 Requires-Dist: mp_api
 Requires-Dist: pydantic
 Requires-Dist: rich
+Requires-Dist: dask_jobqueue
+Requires-Dist: pyyaml
 
 # Abvio Repository
 
