@@ -210,7 +210,7 @@ class Input:
             job.to_file(os.path.join(directory, "submit.sh"))
 
     @classmethod
-    def from_vaspset(cls, directory: Path | str) -> dict:
+    def from_directory(cls, directory: Path | str) -> dict:
         """Reads the input files from a directory
 
         Args:
@@ -235,7 +235,7 @@ class Input:
 
         return cls(input_dict)
 
-    def write_file(self, filename: Path | str):
+    def write_yaml(self, filename: Path | str):
         """Writes the input dictionary to a file
 
         Args:

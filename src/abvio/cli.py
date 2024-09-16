@@ -110,7 +110,7 @@ def main():
 
     if args.convert:
         input_object = Input.from_vaspset(user_input)
-        input_object.write_file(output_path)
+        input_object.write_yaml(output_path)
 
 
 if __name__ == "__main__":
