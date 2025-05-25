@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: abvio
 Version: 0.0.1
 Summary: A Python package to simplify VASP input files
@@ -16,6 +16,9 @@ Requires-Dist: pymatgen
 Requires-Dist: mp_api
 Requires-Dist: pydantic
 Requires-Dist: rich
+Requires-Dist: dask_jobqueue
+Requires-Dist: pyyaml
+Dynamic: license-file
 
 # Abvio Repository
 

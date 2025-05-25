@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pymatgen.core import Structure
 from pymatgen.io.vasp import Incar, Kpoints, Poscar
+from pymatgen.io.vasp.inputs import KpointsSupportedModes
 
 from abvio.structure import StructureMeta
 from abvio.kpoints import KpointsMeta
@@ -71,6 +72,10 @@ def convert_pmg_kpoints_name_to_abvio_name(pmg_name: str) -> str:
     """
 
     kpoints_name_map = {
+        KpointsSupportedModes(0): "surface",
+        KpointsSupportedModes(1): "gamma",
+        KpointsSupportedModes(2): "monkhorst",
+        KpointsSupportedModes(3): "line",
         "Gamma": "gamma",
         "Monkhorst": "monkhorst",
         "Line_mode": "line",
