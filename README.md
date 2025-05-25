@@ -145,7 +145,7 @@ ___
 If you want to try it out, feel free to take any of the above files and test them using the command line interface by running
 
 ```
-abvio input.yaml -o /tmp
+abvi input.yaml -o /tmp
 ```
 
 Which will write INCAR, KPOINTS, and POSCAR to the root tmp directory (just make sure you change the file name in the command to match your file name). 
@@ -153,9 +153,7 @@ Which will write INCAR, KPOINTS, and POSCAR to the root tmp directory (just make
 You can also preview what the output should look like using 
 
 ```
-abvio input.yaml --preview
+abvi input.yaml --preview
 ```
 
-Which will give an output like this
-
-![cli preview](/docs/images/preview.png)
+Which will give a formatted output with multiple columns.

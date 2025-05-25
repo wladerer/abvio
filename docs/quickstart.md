@@ -9,22 +9,22 @@ pip install abvio
 
 ## CLI Usage 
 
-abvio is a CLI-first program. Therefore, the only entry-point you will need is the `abvio` command. We can run a quick example of converting your own VASP input set to an abvio.yaml file to get a feel for the format. We can do this by navigating to the directory containing your VASP input files and running the following command
+abvio is a CLI-first program. Therefore, the only entry-points you will need are the `abvi` and `abvo` commands. We can run a quick example of converting your own VASP input set to an abvio.yaml file to get a feel for the format. We can do this by navigating to the directory containing your VASP input files and running the following command
 
 ```bash
-abvio . --convert -o myfile.yaml
+abvi . --convert -o myfile.yaml
 ```
 
 Which will produce a file named `myfile.yaml`. You can then verify that this worked by running
 
 ```bash
-abvio myfile.yaml --preview
+abvi myfile.yaml --preview
 ```
 
 And it will give you a formatted glimpse of what it has read in. If you are satisfied with the results, run
 
 ```bash
-abvio myfile.yaml -o . 
+abvi myfile.yaml -o . 
 ```
 
 which will write out the files INCAR, KPOINTS, and POSCAR. Be careful though, this program will overwrite exisiting files!
@@ -60,3 +60,8 @@ kpoints:
 And if we run preview, we will get the following output:
 
 ![dysb](images/DySb.png)
+
+
+## Summarizing Outputs
+
+A new addition to `abvio` is the ability to create comprehensive summaries of VASP calculations. You can supply the path of the directory that contains your VASP output files.
