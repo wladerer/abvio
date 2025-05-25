@@ -1,2 +1,3 @@
 [console_scripts]
-abvio = abvio.cli:main
+abvi = abvio.cli:main
+abvo = abvio.outputs:main

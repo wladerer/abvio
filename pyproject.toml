@@ -24,7 +24,8 @@ dependencies = [
 ]
 
 [project.scripts]
-abvio = "abvio.cli:main"
+abvi = "abvio.cli:main"
+abvo = "abvio.outputs:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]

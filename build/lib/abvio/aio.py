@@ -239,10 +239,13 @@ class Input:
         }
 
         return cls(input_dict)
-    
-    
-    def to_dict(self) -> dict:
-        """Converts Input object to a formatted dictionary"""
+
+    def write_file(self, filename: Path | str):
+        """Writes the input dictionary to a file
+
+        Args:
+            filepath: The path to write the abvio yaml file to
+        """
 
         # prepare structure and kpoints dictionaries
         structure_dict = format_structure_output(self.structure)
@@ -254,18 +257,6 @@ class Input:
             "incar": self.incar_dict,
             "kpoints": kpoints_dict,
         }
-
-        return output_dict
-
-
-    def write_file(self, filename: Path | str):
-        """Writes the input dictionary to a file
-
-        Args:
-            filepath: The path to write the abvio yaml file to
-        """
-
-        output_dict = self.to_dict()
 
         with open(filename, "w") as f:
             yaml.dump(output_dict, f, default_flow_style=None)

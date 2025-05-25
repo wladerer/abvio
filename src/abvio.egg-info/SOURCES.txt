@@ -7,6 +7,7 @@ src/abvio/check.py
 src/abvio/cli.py
 src/abvio/incar.py
 src/abvio/kpoints.py
+src/abvio/outputs.py
 src/abvio/scheduler.py
 src/abvio/structure.py
 src/abvio.egg-info/PKG-INFO
