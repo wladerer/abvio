@@ -4,11 +4,9 @@ import yaml
 import getpass
 import platform
 import socket
-
 from datetime import datetime, timezone
-from abvio.aio import format_structure_output, Input
+from abvio.aio import format_structure_output
 from pymatgen.io.vasp import Vasprun, Outcar
-
 
 def extract_vasprun_summary(vasprun_path: str) -> dict:
     v = Vasprun(
@@ -18,7 +16,6 @@ def extract_vasprun_summary(vasprun_path: str) -> dict:
         exception_on_bad_xml=False,
         parse_potcar_file=False,
     )
-
     summary = {
         "converged": v.converged,
         "converged_electronic": v.converged_electronic,
@@ -32,39 +29,43 @@ def extract_vasprun_summary(vasprun_path: str) -> dict:
         "incar": v.incar.as_dict(),
         "final_structure": format_structure_output(v.final_structure) if v.final_structure is not None else None,
     }
-
     return summary
-
 
 def extract_outcar_summary(outcar_path: str) -> dict:
     outcar = Outcar(outcar_path)
-
     summary = {
         "run_stats": outcar.run_stats if outcar.run_stats is not None else None,
         "free_energy": float(outcar.final_fr_energy) if outcar.final_fr_energy is not None else None,
         "nelect": float(outcar.nelect) if outcar.nelect is not None else None,
         "magnetization": float(outcar.total_mag) if outcar.total_mag is not None else None,
     }
-
     return summary
-
 
 def main():
     parser = argparse.ArgumentParser(description="Summarize VASP outputs to YAML")
     parser.add_argument("input", type=str, help="Path to the VASP output directory")
     parser.add_argument("-o", "--output", type=str, help="Path to the output YAML file")
+    parser.add_argument("-m", "--message", type=str, help="Optional note or message")
+    parser.add_argument("-t", "--tags", nargs="*", help="Optional tags to annotate the calculation (e.g., slab 111 soc)")
     args = parser.parse_args()
 
-    output_data = { "metadata": {
-        "timestamp": datetime.now(timezone.utc).isoformat(), 
+    metadata = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "hostname": socket.gethostname(),
         "user": getpass.getuser(),
-        "platform": platform.platform()
-        }
+        "platform": platform.platform(),
+        "current_directory": os.getcwd()
     }
+    
+    if args.message:
+        metadata["note"] = args.message
+    
+    if args.tags:
+        metadata["tags"] = args.tags
+    
+    output_data = {"metadata": metadata}
 
     output_dir = args.input
-
     vasprun_path = os.path.join(output_dir, "vasprun.xml")
     outcar_path = os.path.join(output_dir, "OUTCAR")
 
@@ -83,7 +84,6 @@ def main():
             yaml.dump(output_data, f, sort_keys=False, default_flow_style=False)
     else:
         print(yaml.dump(output_data, sort_keys=False, default_flow_style=False))
-
 
 if __name__ == "__main__":
     main()
