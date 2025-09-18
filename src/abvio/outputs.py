@@ -7,29 +7,35 @@ import socket
 from datetime import datetime, timezone
 from abvio.aio import format_structure_output
 from pymatgen.io.vasp import Vasprun, Outcar
+from typing import Optional, Dict, Any
 
-def extract_vasprun_summary(vasprun_path: str) -> dict:
-    v = Vasprun(
-        vasprun_path,
-        parse_dos=False,
-        parse_eigen=False,
-        exception_on_bad_xml=False,
-        parse_potcar_file=False,
-    )
-    summary = {
-        "converged": v.converged,
-        "converged_electronic": v.converged_electronic,
-        "converged_ionic": v.converged_ionic,
-        "final_energy": float(v.final_energy) if v.final_energy is not None else None,  # Convert to plain float
-        "run_type": str(v.run_type) if v.run_type is not None else None,
-        "nionic_steps": v.nionic_steps,
-        "efermi": float(v.efermi) if v.efermi is not None else None,
-        "spin": v.is_spin,
-        "potcar_symbols": v.potcar_symbols,
-        "incar": v.incar.as_dict(),
-        "final_structure": format_structure_output(v.final_structure) if v.final_structure is not None else None,
-    }
-    return summary
+def extract_vasprun_summary(vasprun_path: str) -> Optional[Dict[str, Any]]:
+    try:
+        v = Vasprun(
+            vasprun_path,
+            parse_dos=False,
+            parse_eigen=False,
+            exception_on_bad_xml=False,
+            parse_potcar_file=False,
+        )
+        summary = {
+            "converged": v.converged,
+            "converged_electronic": v.converged_electronic,
+            "converged_ionic": v.converged_ionic,
+            "final_energy": float(v.final_energy) if v.final_energy is not None else None,  # Convert to plain float
+            "run_type": str(v.run_type) if v.run_type is not None else None,
+            "nionic_steps": v.nionic_steps,
+            "efermi": float(v.efermi) if v.efermi is not None else None,
+            "spin": v.is_spin,
+            "potcar_symbols": v.potcar_symbols,
+            "incar": v.incar.as_dict(),
+            "final_structure": format_structure_output(v.final_structure) if v.final_structure is not None else None,
+        }
+        return summary
+
+    except Exception as e:
+        print(f"Error parsing vasprun.xml: {e}")
+        return None
 
 def extract_outcar_summary(outcar_path: str) -> dict:
     outcar = Outcar(outcar_path)
@@ -56,13 +62,13 @@ def main():
         "platform": platform.platform(),
         "current_directory": os.getcwd()
     }
-    
+
     if args.message:
         metadata["note"] = args.message
-    
+
     if args.tags:
         metadata["tags"] = args.tags
-    
+
     output_data = {"metadata": metadata}
 
     output_dir = args.input
