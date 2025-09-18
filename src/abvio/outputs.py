@@ -55,12 +55,14 @@ def main():
     parser.add_argument("-t", "--tags", nargs="*", help="Optional tags to annotate the calculation (e.g., slab 111 soc)")
     args = parser.parse_args()
 
+    output_dir = args.input
+
     metadata = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hostname": socket.gethostname(),
         "user": getpass.getuser(),
         "platform": platform.platform(),
-        "current_directory": os.getcwd()
+        "current_directory": os.path.abspath(output_dir)
     }
 
     if args.message:
@@ -71,7 +73,6 @@ def main():
 
     output_data = {"metadata": metadata}
 
-    output_dir = args.input
     vasprun_path = os.path.join(output_dir, "vasprun.xml")
     outcar_path = os.path.join(output_dir, "OUTCAR")
 
