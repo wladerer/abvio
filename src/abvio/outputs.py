@@ -292,6 +292,9 @@ def process_single_directory(args_tuple: Tuple[str, Dict]) -> Tuple[str, Dict]:
 def create_slurm_scripts(directories: List[str], output_dir: str, script_name: str = "vasp_summary") -> None:
     """Create SLURM array job script for parallel processing."""
     
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Create job list file
     job_list_file = f"{output_dir}/{script_name}_jobs.txt"
     with open(job_list_file, 'w') as f:
