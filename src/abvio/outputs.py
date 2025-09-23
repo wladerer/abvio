@@ -9,6 +9,12 @@ from abvio.aio import format_structure_output
 from pymatgen.io.vasp import Vasprun, Outcar
 from typing import Optional, Dict, Any
 
+import logging
+
+logger = logging.getLogger(__name__)
+#configure logging to have a basic configuration
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 def extract_vasprun_summary(vasprun_path: str) -> Optional[Dict[str, Any]]:
     try:
         v = Vasprun(
@@ -47,12 +53,17 @@ def extract_outcar_summary(outcar_path: str) -> dict:
     }
     return summary
 
+
+def is_large_file(file_path: str, max_size_gb: int = 6) -> bool:
+    return os.path.getsize(file_path) > max_size_gb * (1024 ** 3)
+
 def main():
     parser = argparse.ArgumentParser(description="Summarize VASP outputs to YAML")
     parser.add_argument("input", type=str, help="Path to the VASP output directory")
     parser.add_argument("-o", "--output", type=str, help="Path to the output YAML file")
     parser.add_argument("-m", "--message", type=str, help="Optional note or message")
     parser.add_argument("-t", "--tags", nargs="*", help="Optional tags to annotate the calculation (e.g., slab 111 soc)")
+    parser.add_argument("--max-size-gb", type=int, default=6, help="Maximum file size in GB to process (default: 6)")
     args = parser.parse_args()
 
     output_dir = args.input
@@ -77,20 +88,27 @@ def main():
     outcar_path = os.path.join(output_dir, "OUTCAR")
 
     if os.path.isfile(vasprun_path):
-        output_data["vasprun"] = extract_vasprun_summary(vasprun_path)
+        if is_large_file(vasprun_path, args.max_size_gb):
+            logger.warning(f"{vasprun_path} exceeds the maximum file size of {args.max_size_gb} GB and will be skipped")
+        else:
+            output_data["vasprun"] = extract_vasprun_summary(vasprun_path)
     else:
-        print("Warning: vasprun.xml not found")
+        logger.warning("vasprun.xml not found")
 
     if os.path.isfile(outcar_path):
-        output_data["outcar"] = extract_outcar_summary(outcar_path)
+        if is_large_file(outcar_path, args.max_size_gb):
+            logger.warning(f"{outcar_path} exceeds the maximum file size of {args.max_size_gb} GB and will be skipped")
+        else:
+            output_data["outcar"] = extract_outcar_summary(outcar_path)
     else:
-        print("Warning: OUTCAR not found")
+        logger.warning("OUTCAR not found")
 
     if args.output:
         with open(args.output, "w") as f:
             yaml.dump(output_data, f, sort_keys=False, default_flow_style=False)
     else:
-        print(yaml.dump(output_data, sort_keys=False, default_flow_style=False))
+        logger.info("Output data:")
+        logger.info(yaml.dump(output_data, sort_keys=False, default_flow_style=False))
 
 if __name__ == "__main__":
     main()
