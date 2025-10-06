@@ -180,6 +180,10 @@ def main():
         logger.debug(f"Parsing {directory}")
         try:
             normalized_dir = directory.resolve().as_posix()
+
+            if normalized_dir not in paths:
+                logger.debug(f"{normalized_dir} not found in DB paths")
+
             if not args.force and normalized_dir in paths:
                 logger.info(f"Skipping {directory} (already in database)")
                 continue
