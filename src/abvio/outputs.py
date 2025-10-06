@@ -137,11 +137,11 @@ def insert_job(conn, job: Dict[str, Any]):
     conn.commit()
 
 
-def get_paths_from_db(conn) -> List[Path]:
-    """Retrieve all paths from the jobs table."""
+def get_paths_from_db(conn) -> set[str]:
+    """Return a set of all job directory paths currently in the database."""
     cursor = conn.cursor()
     cursor.execute("SELECT path FROM jobs")
-    return [Path(row[0]) for row in cursor.fetchall()]
+    return {Path(row[0]).resolve().as_posix() for row in cursor.fetchall()}
 
 
 def main():
@@ -179,8 +179,8 @@ def main():
         directory = Path(d).resolve()
         logger.debug(f"Parsing {directory}")
         try:
-            # Skip if already in DB, unless --force is used
-            if not args.force and directory in paths:
+            normalized_dir = directory.resolve().as_posix()
+            if not args.force and normalized_dir in paths:
                 logger.info(f"Skipping {directory} (already in database)")
                 continue
 
