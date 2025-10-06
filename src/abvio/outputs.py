@@ -136,6 +136,15 @@ def insert_job(conn, job: Dict[str, Any]):
     conn.commit()
 
 
+def path_exists_in_db(conn, directory_path: Path) -> bool:
+    """Check if a directory path already exists in the jobs table."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM jobs WHERE path = ?", (str(directory_path.resolve()),)
+    )
+    return cursor.fetchone() is not None
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Summarize VASP jobs into an SQLite database."
@@ -152,6 +161,9 @@ def main():
         help="Overwrite existing database file if it exists",
     )
     parser.add_argument("--verbose", action="store_true", help="Enable debug logging")
+    parser.add_argument(
+        "--force", action="store_true", help="Force parsing even if already in database"
+    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -161,12 +173,19 @@ def main():
 
     parsed = 0
     for d in args.directories:
+        directory = Path(d).resolve()
         try:
-            job = parse_vasp_job(Path(d))
+            # Skip if already in DB, unless --force is used
+            if not args.force and path_exists_in_db(conn, directory):
+                logger.info(f"Skipping {directory} (already in database)")
+                continue
+
+            job = parse_vasp_job(directory)
             insert_job(conn, job)
             parsed += 1
+
         except Exception as e:
-            logger.error(f"Failed to parse {d}: {e}")
+            logger.error(f"Failed to parse {directory}: {e}")
 
     conn.close()
     logger.info(f"Saved {parsed} jobs into SQLite database at {args.output}")
