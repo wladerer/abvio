@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+from numpy import log
 from pymatgen.io.vasp import Vasprun
 from pymatgen.core import Structure
 
@@ -136,13 +137,11 @@ def insert_job(conn, job: Dict[str, Any]):
     conn.commit()
 
 
-def path_exists_in_db(conn, directory_path: Path) -> bool:
-    """Check if a directory path already exists in the jobs table."""
+def get_paths_from_db(conn) -> List[Path]:
+    """Retrieve all paths from the jobs table."""
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT 1 FROM jobs WHERE path = ?", (str(directory_path.resolve()),)
-    )
-    return cursor.fetchone() is not None
+    cursor.execute("SELECT path FROM jobs")
+    return [Path(row[0]) for row in cursor.fetchall()]
 
 
 def main():
@@ -171,12 +170,17 @@ def main():
 
     conn = init_sqlite(Path(args.output), overwrite=args.overwrite)
 
+    # get a list of all paths in the database
+    paths = get_paths_from_db(conn)
+    logger.debug(f"Paths in database: {paths}")
+
     parsed = 0
     for d in args.directories:
         directory = Path(d).resolve()
+        logger.debug(f"Parsing {directory}")
         try:
             # Skip if already in DB, unless --force is used
-            if not args.force and path_exists_in_db(conn, directory):
+            if not args.force and directory in paths:
                 logger.info(f"Skipping {directory} (already in database)")
                 continue
 
