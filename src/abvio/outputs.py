@@ -50,8 +50,9 @@ def parse_vasprun(vasprun_path: Path) -> Dict[str, Any]:
 
 def get_file_metadata(file_path: Path) -> Dict[str, Any]:
     """Get basic metadata for a file."""
+    directory = file_path.parent.resolve()
     return {
-        "path": str(file_path.resolve()),
+        "path": str(directory),
         "modified": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
         "created": datetime.fromtimestamp(file_path.stat().st_ctime).isoformat(),
     }
@@ -138,7 +139,6 @@ def insert_job(conn, job: Dict[str, Any]):
 
 
 def get_paths_from_db(conn) -> set[str]:
-    """Return a set of all job directory paths currently in the database."""
     cursor = conn.cursor()
     cursor.execute("SELECT path FROM jobs")
     return {Path(row[0]).resolve().as_posix() for row in cursor.fetchall()}
@@ -177,7 +177,6 @@ def main():
     parsed = 0
     for d in args.directories:
         directory = Path(d).resolve()
-        logger.debug(f"Parsing {directory}")
         try:
             normalized_dir = directory.resolve().as_posix()
 
