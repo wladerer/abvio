@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 from numpy import log
 from pymatgen.io.vasp import Vasprun
 from pymatgen.core import Structure
+from pymatgen.core.surface import Slab
 
 
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +48,18 @@ def parse_vasprun(vasprun_path: Path) -> Dict[str, Any]:
         "converged_ionic": vasprun.converged_ionic,
     }
 
+def parse_slab_file(file_path: Path) -> Dict[str, Any]:
+    """Load slab.json and extract slab metadata."""
+    with open(file_path) as f:
+        data = json.load(f)
+
+    slab = Slab.from_dict(data)
+
+    return {
+        "miller_index": slab.miller_index,
+        "is_symmetric": int(slab.is_symmetric()),
+    } 
+
 
 def get_file_metadata(file_path: Path) -> Dict[str, Any]:
     """Get basic metadata for a file."""
@@ -67,6 +80,14 @@ def get_unique_id(data: Dict[str, Any]) -> str:
     }
     return hashlib.sha256(json.dumps(core, sort_keys=True).encode()).hexdigest()
 
+def is_slab(possible_slab_dict: Dict[str, Any]) -> bool:
+    """Determine whether a dictionary can be deserialized into a pymatgen Slab."""
+
+    try:
+        _ = Slab.from_dict(possible_slab_dict)
+        return True
+    except Exception:
+        return False
 
 def parse_vasp_job(directory_path: Path) -> Dict[str, Any]:
     """Parse a VASP job directory for vasprun.xml data + metadata."""
@@ -78,8 +99,33 @@ def parse_vasp_job(directory_path: Path) -> Dict[str, Any]:
     file_metadata = get_file_metadata(vasprun_path)
     vasprun_data = parse_vasprun(vasprun_path)
 
-    job = {**file_metadata, **vasprun_data}
-    job["id"] = get_unique_id(job)
+    # --- Optional slab metadata ---
+    slab_json_path = directory_path / "slab.json"
+    slab_data = None
+
+    if slab_json_path.exists():
+        logger.info(f"Found slab.json at {slab_json_path}, attempting to load.")
+        try:
+            possible_slab = json.loads(slab_json_path.read_text())
+            if is_slab(possible_slab):
+                slab_data = possible_slab
+                logger.info("slab.json successfully identified as a valid Slab.")
+            else:
+                logger.warning("slab.json exists but is not a valid Slab dictionary.")
+        except Exception as e:
+            logger.warning(f"Failed to parse slab.json: {e}")
+
+    # --- Build job dict ---
+    job = {
+        **file_metadata,
+        **vasprun_data,
+        "id": get_unique_id({**file_metadata, **vasprun_data})
+    }
+
+    # Attach slab data *only if valid*
+    if slab_data is not None:
+        job["slab"] = slab_data
+
     return job
 
 
@@ -91,6 +137,7 @@ def init_sqlite(db_path: Path, overwrite: bool = False):
 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS jobs (
         id TEXT PRIMARY KEY,
@@ -105,9 +152,11 @@ def init_sqlite(db_path: Path, overwrite: bool = False):
         path TEXT,
         incar TEXT,
         kpoints TEXT,
-        structure TEXT
+        structure TEXT,
+        slab TEXT
     )
     """)
+
     conn.commit()
     return conn
 
@@ -115,26 +164,29 @@ def init_sqlite(db_path: Path, overwrite: bool = False):
 def insert_job(conn, job: Dict[str, Any]):
     """Insert or update a job record in the database."""
     cursor = conn.cursor()
+
     cursor.execute(
         """
-    INSERT OR REPLACE INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """,
+        INSERT OR REPLACE INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
         (
             job["id"],
-            job["composition"],
-            job["energy"],
-            job["surface_area"],
-            int(job["converged"]),
-            int(job["converged_electronic"]),
-            int(job["converged_ionic"]),
-            job["modified"],
-            job["created"],
-            job["path"],
-            json.dumps(job["incar"]),
-            json.dumps(job["kpoints"]),
-            json.dumps(job["structure"]),
+            job.get("composition"),
+            job.get("energy"),
+            job.get("surface_area"),
+            int(job.get("converged", False)),
+            int(job.get("converged_electronic", False)),
+            int(job.get("converged_ionic", False)),
+            job.get("modified"),
+            job.get("created"),
+            job.get("path"),
+            json.dumps(job.get("incar")),
+            json.dumps(job.get("kpoints")),
+            json.dumps(job.get("structure")),
+            json.dumps(job.get("slab")) if job.get("slab") is not None else None,
         ),
     )
+
     conn.commit()
 
 
