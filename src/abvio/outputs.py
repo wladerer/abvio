@@ -3,12 +3,13 @@ import argparse
 import json
 import logging
 import hashlib
+import os
 import sqlite3
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
-from numpy import log
 from pymatgen.io.vasp import Vasprun
 from pymatgen.core import Structure
 from pymatgen.core.surface import Slab
@@ -164,7 +165,6 @@ def init_sqlite(db_path: Path, overwrite: bool = False):
 def insert_job(conn, job: Dict[str, Any]):
     """Insert or update a job record in the database."""
     cursor = conn.cursor()
-
     cursor.execute(
         """
         INSERT OR REPLACE INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -187,7 +187,24 @@ def insert_job(conn, job: Dict[str, Any]):
         ),
     )
 
+
+def insert_jobs(conn, jobs: List[Dict[str, Any]]):
+    """Batch-insert multiple job records and commit once."""
+    for job in jobs:
+        insert_job(conn, job)
     conn.commit()
+
+
+def _parse_worker(directory: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Top-level worker for multiprocessing: parse a VASP job directory.
+
+    Returns (job, None) on success or (None, error_message) on failure.
+    """
+    try:
+        job = parse_vasp_job(Path(directory))
+        return job, None
+    except Exception as e:
+        return None, f"{directory}: {e}"
 
 
 def get_paths_from_db(conn) -> set[str]:
@@ -215,6 +232,12 @@ def main():
     parser.add_argument(
         "--force", action="store_true", help="Force parsing even if already in database"
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=min(32, os.cpu_count() or 1),
+        help="Number of parallel worker processes (default: min(32, cpu_count))",
+    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -222,32 +245,33 @@ def main():
 
     conn = init_sqlite(Path(args.output), overwrite=args.overwrite)
 
-    # get a list of all paths in the database
-    paths = get_paths_from_db(conn)
-    logger.debug(f"Paths in database: {paths}")
+    existing_paths = get_paths_from_db(conn)
+    logger.debug(f"Paths in database: {existing_paths}")
 
-    parsed = 0
+    to_parse = []
     for d in args.directories:
-        directory = Path(d).resolve()
-        try:
-            normalized_dir = directory.resolve().as_posix()
+        normalized = Path(d).resolve().as_posix()
+        if not args.force and normalized in existing_paths:
+            logger.info(f"Skipping {d} (already in database)")
+        else:
+            to_parse.append(normalized)
 
-            if normalized_dir not in paths:
-                logger.debug(f"{normalized_dir} not found in DB paths")
+    logger.info(f"Parsing {len(to_parse)} directories with {args.workers} workers")
 
-            if not args.force and normalized_dir in paths:
-                logger.info(f"Skipping {directory} (already in database)")
-                continue
+    jobs = []
+    with ProcessPoolExecutor(max_workers=args.workers) as executor:
+        futures = {executor.submit(_parse_worker, d): d for d in to_parse}
+        for future in as_completed(futures):
+            job, error = future.result()
+            if error:
+                logger.error(f"Failed to parse {error}")
+            else:
+                jobs.append(job)
+                logger.info(f"Parsed {job['path']}")
 
-            job = parse_vasp_job(directory)
-            insert_job(conn, job)
-            parsed += 1
-
-        except Exception as e:
-            logger.error(f"Failed to parse {directory}: {e}")
-
+    insert_jobs(conn, jobs)
     conn.close()
-    logger.info(f"Saved {parsed} jobs into SQLite database at {args.output}")
+    logger.info(f"Saved {len(jobs)} jobs into SQLite database at {args.output}")
 
 
 if __name__ == "__main__":
