@@ -5,3 +5,6 @@ pydantic
 rich
 dask_jobqueue
 pyyaml
+
+[dev]
+pytest

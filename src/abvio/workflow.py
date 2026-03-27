@@ -150,22 +150,25 @@ def _load_user_slurm_cfg() -> dict:
 
 
 def _make_submit_script(directory: Path, slurm_cfg: dict) -> str:
-    partition = slurm_cfg.get("partition", "gpu")
-    nodes     = slurm_cfg.get("nodes", 1)
-    ntasks    = slurm_cfg.get("ntasks", 128)
-    time_     = slurm_cfg.get("time", "12:00:00")
-    vasp_cmd  = slurm_cfg.get("vasp_cmd", "mpirun vasp_std")
-    name      = directory.name
+    nodes    = slurm_cfg.get("nodes", 1)
+    ntasks   = slurm_cfg.get("ntasks", 128)
+    time_    = slurm_cfg.get("time", "12:00:00")
+    vasp_cmd = slurm_cfg.get("vasp_cmd", "mpirun vasp_std")
+    name     = directory.name
 
     lines = [
         "#!/bin/bash",
         f"#SBATCH --job-name={name}",
-        f"#SBATCH --partition={partition}",
         f"#SBATCH --nodes={nodes}",
         f"#SBATCH --ntasks={ntasks}",
         f"#SBATCH --time={time_}",
         f"#SBATCH --output={directory}/slurm-%j.out",
     ]
+
+    if "partition" in slurm_cfg:
+        lines.append(f"#SBATCH --partition={slurm_cfg['partition']}")
+    if "queue" in slurm_cfg:
+        lines.append(f"#SBATCH -q {slurm_cfg['queue']}")
 
     for directive in slurm_cfg.get("extra", []):
         lines.append(f"#SBATCH {directive}")

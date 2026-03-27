@@ -10,6 +10,7 @@ src/abvio/kpoints.py
 src/abvio/outputs.py
 src/abvio/scheduler.py
 src/abvio/structure.py
+src/abvio/workflow.py
 src/abvio.egg-info/PKG-INFO
 src/abvio.egg-info/SOURCES.txt
 src/abvio.egg-info/dependency_links.txt
@@ -23,3 +24,4 @@ tests/test_kpoints.py
 tests/test_outputs.py
 tests/test_scheduler.py
 tests/test_structure.py
+tests/test_workflow.py

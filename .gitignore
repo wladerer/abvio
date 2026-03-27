@@ -7,3 +7,5 @@ __pycache__/
 
 .ruff_cache/
 .venv
+
+download_deps.sh

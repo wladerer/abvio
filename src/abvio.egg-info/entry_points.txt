@@ -1,3 +1,4 @@
 [console_scripts]
 abvi = abvio.cli:main
 abvo = abvio.outputs:main
+abvw = abvio.workflow:main

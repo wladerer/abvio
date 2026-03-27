@@ -18,6 +18,8 @@ Requires-Dist: pydantic
 Requires-Dist: rich
 Requires-Dist: dask_jobqueue
 Requires-Dist: pyyaml
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
 Dynamic: license-file
 
 # Abvio Repository
