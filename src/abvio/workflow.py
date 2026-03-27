@@ -385,12 +385,12 @@ PREP_FUNCTIONS: dict[str, Callable] = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 class WorkflowStep:
-    def __init__(self, cfg: dict, root: Path):
+    def __init__(self, cfg: dict, root: Path, workspace: Path):
         self.name    = cfg["name"]
         self.type    = cfg["type"]
         self.cfg     = cfg
         self.depends = cfg.get("depends")          # name of parent step, or None
-        self.dir     = root / cfg.get("dir", cfg["name"])
+        self.dir     = workspace / cfg.get("dir", cfg["name"])
         self.state   = State.PENDING
         self.job_id  = None
 
@@ -408,14 +408,15 @@ class VaspWorkflow:
 
         self.name         = self.cfg["name"]
         self.root         = Path(self.cfg["root"])
-        # User-local overrides (~/.config/abvio/slurm.yaml) win over the workflow YAML.
+        self.workspace    = self.root / self.cfg.get("workspace", "workspace")
+        # User-local overrides (~/.config/abvio/config.yaml) win over the workflow YAML.
         self.slurm_cfg    = {**self.cfg.get("slurm", {}), **_load_user_slurm_cfg()}
         self.potcar_map   = self.cfg.get("potcar_map", {})
         self.poll_interval = self.cfg.get("poll_interval", 60)
 
         self.steps: dict[str, WorkflowStep] = {}
         for step_cfg in self.cfg["steps"]:
-            step = WorkflowStep(step_cfg, self.root)
+            step = WorkflowStep(step_cfg, self.root, self.workspace)
             self.steps[step.name] = step
 
         self._load_state()
