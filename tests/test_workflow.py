@@ -105,8 +105,8 @@ class TestMakeSubmitScript:
 
     def test_defaults_applied(self):
         script = _make_submit_script(Path("/fake"), {})
-        assert "#SBATCH --partition=gpu" in script
-        assert "mpirun vasp_std"         in script
+        assert "mpirun vasp_std" in script
+        assert "--partition"     not in script   # partition is optional, not a default
 
     def test_extra_directives_appended(self):
         script = _make_submit_script(Path("/fake"), {
@@ -118,14 +118,29 @@ class TestMakeSubmitScript:
 
     def test_extra_directives_absent_when_not_set(self):
         script = _make_submit_script(Path("/fake"), {})
-        assert "--account" not in script
+        assert "--account"    not in script
         assert "--constraint" not in script
+
+    def test_modules_and_env(self):
+        script = _make_submit_script(Path("/fake"), {
+            "modules": ["VASP/6.1.2", "intel/2023"],
+            "env":     {"VASP_NPROCS": 128, "OMP_NUM_THREADS": 1},
+            "vasp_cmd": "mpirun vasp_ncl",
+        })
+        assert "module load VASP/6.1.2"    in script
+        assert "module load intel/2023"    in script
+        assert "export VASP_NPROCS=128"    in script
+        assert "export OMP_NUM_THREADS=1"  in script
+        assert "mpirun vasp_ncl"           in script
+        # modules/env must come before the vasp command
+        assert script.index("module load") < script.index("mpirun vasp_ncl")
+        assert script.index("export")      < script.index("mpirun vasp_ncl")
 
 
 class TestUserSlurmConfig:
     def test_user_cfg_merged_over_yaml(self, tmp_path, mock_slurm, monkeypatch):
         """Settings in ~/.config/abvio/slurm.yaml override the workflow YAML."""
-        user_cfg = tmp_path / "slurm.yaml"
+        user_cfg = tmp_path / "config.slurm"
         user_cfg.write_text("account: secret_project\npartition: special\n")
         monkeypatch.setattr(wf, "_USER_SLURM_CFG", user_cfg)
 
@@ -147,7 +162,7 @@ class TestUserSlurmConfig:
 
     def test_user_cfg_extra_in_slurm_cfg(self, tmp_path, mock_slurm, monkeypatch):
         """extra directives from the user file land in slurm_cfg and produce correct script."""
-        user_cfg = tmp_path / "slurm.yaml"
+        user_cfg = tmp_path / "config.slurm"
         user_cfg.write_text("extra:\n  - '--account=myproject'\n  - '-q high'\n")
         monkeypatch.setattr(wf, "_USER_SLURM_CFG", user_cfg)
 

@@ -138,7 +138,7 @@ def squeue_states(job_ids: list[str]) -> dict[str, str]:
     return states
 
 
-_USER_SLURM_CFG = Path.home() / ".config" / "abvio" / "slurm.yaml"
+_USER_SLURM_CFG = Path.home() / ".config" / "abvio" / "config.slurm"
 
 
 def _load_user_slurm_cfg() -> dict:
@@ -173,7 +173,15 @@ def _make_submit_script(directory: Path, slurm_cfg: dict) -> str:
     for directive in slurm_cfg.get("extra", []):
         lines.append(f"#SBATCH {directive}")
 
-    lines += ["", f"cd {directory}", vasp_cmd, ""]
+    lines.append("")
+
+    for mod in slurm_cfg.get("modules", []):
+        lines.append(f"module load {mod}")
+
+    for key, val in slurm_cfg.get("env", {}).items():
+        lines.append(f"export {key}={val}")
+
+    lines += [f"cd {directory}", vasp_cmd, ""]
     return "\n".join(lines)
 
 
