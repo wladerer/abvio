@@ -138,6 +138,17 @@ def squeue_states(job_ids: list[str]) -> dict[str, str]:
     return states
 
 
+_USER_SLURM_CFG = Path.home() / ".config" / "abvio" / "slurm.yaml"
+
+
+def _load_user_slurm_cfg() -> dict:
+    """Load ~/.config/abvio/slurm.yaml if it exists; silently return {} otherwise."""
+    if _USER_SLURM_CFG.exists():
+        with open(_USER_SLURM_CFG) as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
 def _make_submit_script(directory: Path, slurm_cfg: dict) -> str:
     partition = slurm_cfg.get("partition", "gpu")
     nodes     = slurm_cfg.get("nodes", 1)
@@ -146,18 +157,21 @@ def _make_submit_script(directory: Path, slurm_cfg: dict) -> str:
     vasp_cmd  = slurm_cfg.get("vasp_cmd", "mpirun vasp_std")
     name      = directory.name
 
-    return (
-        "#!/bin/bash\n"
-        f"#SBATCH --job-name={name}\n"
-        f"#SBATCH --partition={partition}\n"
-        f"#SBATCH --nodes={nodes}\n"
-        f"#SBATCH --ntasks={ntasks}\n"
-        f"#SBATCH --time={time_}\n"
-        f"#SBATCH --output={directory}/slurm-%j.out\n"
-        "\n"
-        f"cd {directory}\n"
-        f"{vasp_cmd}\n"
-    )
+    lines = [
+        "#!/bin/bash",
+        f"#SBATCH --job-name={name}",
+        f"#SBATCH --partition={partition}",
+        f"#SBATCH --nodes={nodes}",
+        f"#SBATCH --ntasks={ntasks}",
+        f"#SBATCH --time={time_}",
+        f"#SBATCH --output={directory}/slurm-%j.out",
+    ]
+
+    for directive in slurm_cfg.get("extra", []):
+        lines.append(f"#SBATCH {directive}")
+
+    lines += ["", f"cd {directory}", vasp_cmd, ""]
+    return "\n".join(lines)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -383,7 +397,8 @@ class VaspWorkflow:
 
         self.name         = self.cfg["name"]
         self.root         = Path(self.cfg["root"])
-        self.slurm_cfg    = self.cfg.get("slurm", {})
+        # User-local overrides (~/.config/abvio/slurm.yaml) win over the workflow YAML.
+        self.slurm_cfg    = {**self.cfg.get("slurm", {}), **_load_user_slurm_cfg()}
         self.potcar_map   = self.cfg.get("potcar_map", {})
         self.poll_interval = self.cfg.get("poll_interval", 60)
 
@@ -431,11 +446,25 @@ class VaspWorkflow:
         log.info(f"Starting workflow '{self.name}'")
         while True:
             self._tick()
-            if all(s.state in (State.DONE, State.FAILED)
-                   for s in self.steps.values()):
+            terminal = {State.DONE, State.FAILED}
+            if all(s.state in terminal for s in self.steps.values()):
+                break
+            if not self._can_make_progress():
+                log.warning("No further progress possible (blocked by failed steps)")
                 break
             time.sleep(self.poll_interval)
         self._print_status()
+
+    def _can_make_progress(self) -> bool:
+        """Return True if any step is running or could be submitted."""
+        for s in self.steps.values():
+            if s.state in (State.RUNNING, State.READY):
+                return True
+            if s.state == State.PENDING:
+                parent = self._parent(s)
+                if parent is None or parent.state == State.DONE:
+                    return True
+        return False
 
     def _tick(self):
         # 1. Update running jobs

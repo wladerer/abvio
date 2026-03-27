@@ -1,29 +1,15 @@
+import pytest
 import abvio.outputs as outputs
 
-import unittest
-import os
 from pathlib import Path
 
-from pymatgen.io.vasp import Kpoints, Vasprun
-from pymatgen.core import Structure
+FILES_DIR = Path(__file__).parent / "files"
 
 
-base_path = Path(__file__).parent
-files_dir = os.path.join(base_path, "files")
-
-test_vasprun_file = os.path.join(files_dir, "vasprun.xml")
-
-
-class TestOutputs(unittest.TestCase):
-    def test_parse_vasprun(self):
-        output = outputs.parse_vasprun(test_vasprun_file)
-
-        self.assertIsInstance(output, dict)
-        self.assertIn("structure", output)
-        self.assertIn("energy", output)
-        self.assertIn("kpoints", output)
-        self.assertIn("incar", output)
-
-
-if __name__ == "__main__":
-    unittest.main()
+def test_parse_vasprun_returns_expected_keys():
+    result = outputs.parse_vasprun(str(FILES_DIR / "vasprun.xml"))
+    assert isinstance(result, dict)
+    assert "structure" in result
+    assert "energy"    in result
+    assert "kpoints"   in result
+    assert "incar"     in result

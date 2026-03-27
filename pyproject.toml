@@ -23,9 +23,13 @@ dependencies = [
     "pyyaml",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [project.scripts]
 abvi = "abvio.cli:main"
 abvo = "abvio.outputs:main"
+abvw = "abvio.workflow:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]

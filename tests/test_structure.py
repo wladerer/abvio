@@ -1,6 +1,5 @@
-import unittest
+import pytest
 import os
-
 import numpy as np
 import abvio.structure as st
 import abvio.aio as Io
@@ -9,305 +8,182 @@ from pymatgen.io.vasp import Poscar
 from pymatgen.core import Structure, Lattice
 from pathlib import Path
 
-base_path = Path(__file__).parent
-structure_dir = os.path.join(base_path, "structures")
-files_dir = os.path.join(base_path, "files")
+STRUCTURES_DIR = Path(__file__).parent / "structures"
+FILES_DIR      = Path(__file__).parent / "files"
 
 
-def matrix_similarity(
-    matrix1: np.ndarray, matrix2: np.ndarray, tol: float = 1e-6
-) -> bool:
-    """Check if two matrices are similar within a tolerance"""
-    return np.allclose(matrix1, matrix2, atol=tol)
+def matrix_close(a: np.ndarray, b: np.ndarray, tol: float = 1e-6) -> bool:
+    return np.allclose(a, b, atol=tol)
 
 
-class TestFormatingFunctions(unittest.TestCase):
-    """Contains tests that check if read can format species correctly"""
-
-    def test_format_species_dict(self):
-        """Test if format_species can format a list of dictionaries"""
-
-        species = [{"Fe": 2}, {"O": 4}]
-        formatted_species = st.format_species(species)
-
-        self.assertEqual(formatted_species, ["Fe", "Fe", "O", "O", "O", "O"])
+class TestFormattingFunctions:
+    def test_dict_species(self):
+        assert st.format_species([{"Fe": 2}, {"O": 4}]) == ["Fe", "Fe", "O", "O", "O", "O"]
 
     def test_single_species(self):
-        """Test if format_species can format a single species"""
+        assert st.format_species(["Fe"]) == ["Fe"]
 
-        species = ["Fe"]
-        formatted_species = st.format_species(species)
+    def test_list_species(self):
+        assert st.format_species(["Fe", "O"]) == ["Fe", "O"]
 
-        self.assertEqual(formatted_species, ["Fe"])
-
-    def test_format_species_list(self):
-        """Test if format_species can format a list of strings"""
-
-        species = ["Fe", "O"]
-        formatted_species = st.format_species(species)
-
-        self.assertEqual(formatted_species, ["Fe", "O"])
-
-    def test_format_species_invalid(self):
-        """Test if format_species raises an error for invalid input"""
-
-        invalid_species = ["Fe", 2, {4, 0}, {4: 0}, [{4: 0}]]
-
-        for species in invalid_species:
-            with self.assertRaises(ValueError):
-                st.format_species(species)
+    @pytest.mark.parametrize("bad", ["Fe", 2, {4, 0}, {4: 0}, [{4: 0}]])
+    def test_invalid_raises(self, bad):
+        with pytest.raises(ValueError):
+            st.format_species(bad)
 
 
-class TestBaseStructure(unittest.TestCase):
-    def test_valid_base_structure(self):
-        st.BaseStructure(mode="external")
-        st.BaseStructure(mode="manual")
-        st.BaseStructure(mode="prototype")
+class TestBaseStructure:
+    @pytest.mark.parametrize("mode", ["external", "manual", "prototype"])
+    def test_valid_modes(self, mode):
+        st.BaseStructure(mode=mode)
 
+    def test_external_with_file_and_code(self):
         st.BaseStructure(mode="external", file="POSCAR")
         st.BaseStructure(mode="external", code="mp-1234")
         st.BaseStructure(mode="external", code="1234")
 
-    def test_invalid_base_structures(self):
-        with self.assertRaises(ValueError):
-            st.BaseStructure(mode="internal")
-
-        with self.assertRaises(ValueError):
-            st.BaseStructure(mode="wrong")
-
-        with self.assertRaises(ValueError):
-            st.BaseStructure(mode="JohnCena")
+    @pytest.mark.parametrize("mode", ["internal", "wrong", "JohnCena"])
+    def test_invalid_modes(self, mode):
+        with pytest.raises(ValueError):
+            st.BaseStructure(mode=mode)
 
 
-class TestManualStructure(unittest.TestCase):
-    def test_valid_manual_structure(self):
-        lattice = Lattice.from_parameters(a=1, b=1, c=1, alpha=90, beta=90, gamma=90)
-        species = ["Mg", "O"]
-        coords = [[0, 0, 0], [0.5, 0.5, 0.5]]
+class TestManualStructure:
+    def test_from_lattice_object(self):
+        model = st.ManualStructure(
+            lattice=Lattice.from_parameters(1,1,1,90,90,90),
+            species=["Mg","O"], coords=[[0,0,0],[0.5,0.5,0.5]],
+        )
+        assert isinstance(model.structure, Structure)
 
-        model = st.ManualStructure(lattice=lattice, species=species, coords=coords)
-        structure = model.structure
+    def test_from_list(self):
+        model = st.ManualStructure(
+            lattice=[[1,0,0],[0,1,0],[0,0,1]],
+            species=["Mg","O"], coords=[[0,0,0],[0.5,0.5,0.5]],
+        )
+        assert isinstance(model.structure, Structure)
 
-        self.assertIsInstance(structure, Structure)
+    def test_from_numpy(self):
+        model = st.ManualStructure(
+            lattice=np.eye(3),
+            species=["Mg","O"], coords=[[0,0,0],[0.5,0.5,0.5]],
+        )
+        assert isinstance(model.structure, Structure)
 
-    def test_valid_manual_structure_from_array(self):
-        lattice = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-        species = ["Mg", "O"]
-        coords = [[0, 0, 0], [0.5, 0.5, 0.5]]
-
-        model = st.ManualStructure(lattice=lattice, species=species, coords=coords)
-        structure = model.structure
-
-        self.assertIsInstance(structure, Structure)
-
-    def test_valid_manual_structure_from_numpy(self):
-        lattice = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        species = ["Mg", "O"]
-        coords = [[0, 0, 0], [0.5, 0.5, 0.5]]
-
-        model = st.ManualStructure(lattice=lattice, species=species, coords=coords)
-        structure = model.structure
-
-        self.assertIsInstance(structure, Structure)
-
-    def test_invalid_manual_structure(self):
-        with self.assertRaises(ValueError):
-            lattice = Lattice.from_parameters(
-                a=1, b=1, c=1, alpha=90, beta=90, gamma=120
-            )
-            species = ["Mg", "O", "Ti"]
-            coords = [[0, 0, 0], [0.5, 0.5, 0.5]]
-
+    def test_mismatched_species_coords_raises(self):
+        with pytest.raises(ValueError):
             st.ManualStructure(
-                lattice=lattice, species=species, coords=coords
+                lattice=Lattice.from_parameters(1,1,1,90,90,120),
+                species=["Mg","O","Ti"], coords=[[0,0,0],[0.5,0.5,0.5]],
             ).structure
 
-        with self.assertRaises(ValueError):
-            lattice = Lattice.from_parameters(
-                a=1, b=1, c=1, alpha=90, beta=40, gamma=90
-            )
-            species = ["Mg", "O"]
-            coords = [[0, 0, 0], [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]]
-
+    def test_mismatched_coords_species_raises(self):
+        with pytest.raises(ValueError):
             st.ManualStructure(
-                lattice=lattice, species=species, coords=coords
+                lattice=Lattice.from_parameters(1,1,1,90,40,90),
+                species=["Mg","O"], coords=[[0,0,0],[0.5,0.5,0.5],[0.5,0.5,0.5]],
             ).structure
 
-    def test_manual_structure_from_file(self):
-        filepath = os.path.join(files_dir, "lattice_list.yaml")
-        input_dict = Io.load_abvio_yaml(filepath)["structure"]
-
-        model = st.ManualStructure.validate(input_dict)
-        structure = model.structure
-
-        self.assertIsInstance(structure, Structure)
-
-
-class TestPrototypeStructure(unittest.TestCase):
-    perovskite_dict = Io.load_abvio_yaml(os.path.join(files_dir, "prototype_perovskite.yaml"))[
-        "structure"
-    ]
-    fluorite_dict = Io.load_abvio_yaml(os.path.join(files_dir, "prototype_fluorite.yaml"))[
-        "structure"
-    ]
-
-    pervoskite_structure = Structure.from_file(
-        os.path.join(structure_dir, "CaTiO3.vasp")
-    )
-    fluorite_structure = Structure.from_file(os.path.join(structure_dir, "CaF2.vasp"))
-
-    def test_valid_pervoskite_structure(self):
-        """Compares a known structure with the one generated by the prototype structure"""
-
-        species = self.perovskite_dict["species"]
-        lattice = self.perovskite_dict["lattice"]
-        prototype = self.perovskite_dict["prototype"]
-
-        model = st.PrototypeStructure(
-            species=species, lattice=lattice, prototype=prototype
+    def test_from_yaml(self):
+        model = st.ManualStructure.validate(
+            Io.load_abvio_yaml(FILES_DIR / "lattice_list.yaml")["structure"]
         )
-        structure = model.structure
-
-        self.assertIsInstance(structure, Structure)
-        self.assertTrue(
-            matrix_similarity(
-                structure.lattice.matrix, self.pervoskite_structure.lattice.matrix
-            )
-        )
-
-    def test_valid_fluorite_structure(self):
-        """Compares a known structure with the one generated by the prototype structure"""
-
-        species = self.fluorite_dict["species"]
-        lattice = self.fluorite_dict["lattice"]
-        prototype = self.fluorite_dict["prototype"]
-
-        model = st.PrototypeStructure(
-            species=species, lattice=lattice, prototype=prototype
-        )
-        structure = model.structure
-
-        self.assertIsInstance(structure, Structure)
-        self.assertTrue(
-            matrix_similarity(
-                structure.lattice.matrix, self.fluorite_structure.lattice.matrix
-            )
-        )
+        assert isinstance(model.structure, Structure)
 
 
-class TestStructureFromMaterialProject(unittest.TestCase):
+class TestPrototypeStructure:
+    @pytest.fixture(autouse=True)
+    def _load(self):
+        self.perovskite_dict = Io.load_abvio_yaml(FILES_DIR / "prototype_perovskite.yaml")["structure"]
+        self.fluorite_dict   = Io.load_abvio_yaml(FILES_DIR / "prototype_fluorite.yaml")["structure"]
+        self.perovskite_ref  = Structure.from_file(STRUCTURES_DIR / "CaTiO3.vasp")
+        self.fluorite_ref    = Structure.from_file(STRUCTURES_DIR / "CaF2.vasp")
+
+    def test_perovskite(self):
+        d = self.perovskite_dict
+        model = st.PrototypeStructure(species=d["species"], lattice=d["lattice"],
+                                      prototype=d["prototype"])
+        s = model.structure
+        assert isinstance(s, Structure)
+        assert matrix_close(s.lattice.matrix, self.perovskite_ref.lattice.matrix)
+
+    def test_fluorite(self):
+        d = self.fluorite_dict
+        model = st.PrototypeStructure(species=d["species"], lattice=d["lattice"],
+                                      prototype=d["prototype"])
+        s = model.structure
+        assert isinstance(s, Structure)
+        assert matrix_close(s.lattice.matrix, self.fluorite_ref.lattice.matrix)
+
+
+@pytest.mark.network
+class TestStructureFromMaterialsProject:
     def test_valid_code(self):
-        stucture = st.structure_from_mpi_code("mp-5827")
-        self.assertIsInstance(stucture, Structure)
+        assert isinstance(st.structure_from_mpi_code("mp-5827"), Structure)
 
 
-class TestExternalStructure(unittest.TestCase):
-    def test_model_from_file(self):
-        files = ["CaTiO3.vasp", "CaF2.vasp"]
+class TestExternalStructure:
+    @pytest.mark.parametrize("fname", ["CaTiO3.vasp", "CaF2.vasp"])
+    def test_from_file(self, fname):
+        model = st.ExternalStructure(file=str(STRUCTURES_DIR / fname))
+        assert isinstance(model.structure, Structure)
 
-        for file in files:
-            model = st.ExternalStructure(file=os.path.join(structure_dir, file))
-            structure = model.structure
+    def test_from_string(self):
+        string = str(Poscar.from_file(STRUCTURES_DIR / "CaTiO3.vasp"))
+        assert isinstance(st.ExternalStructure(string=string).structure, Structure)
 
-            self.assertIsInstance(structure, Structure)
-
-    def test_model_from_string(self):
-        string = Poscar.from_file(os.path.join(structure_dir, "CaTiO3.vasp")).__str__()
-
-        model = st.ExternalStructure(string=string)
-        structure = model.structure
-
-        self.assertIsInstance(structure, Structure)
-
-    def test_model_from_materials_project(self):
-        model = st.ExternalStructure(code="mp-5827")
-        structure = model.structure
-
-        self.assertIsInstance(structure, Structure)
+    @pytest.mark.network
+    def test_from_materials_project(self):
+        assert isinstance(st.ExternalStructure(code="mp-5827").structure, Structure)
 
 
-class TestStructureFromInputDict(unittest.TestCase):
-    def test_valid_input_dict(self):
-        input_dict = {
-            "mode": "external",
-            "file": os.path.join(structure_dir, "CaTiO3.vasp"),
-        }
+class TestStructureFromInputDict:
+    def test_valid(self):
+        model = st.structure_model_from_input_dict({
+            "mode": "external", "file": str(STRUCTURES_DIR / "CaTiO3.vasp")
+        })
+        assert isinstance(model.structure, Structure)
 
-        model = st.structure_model_from_input_dict(input_dict)
-        structure = model.structure
-        self.assertIsInstance(structure, Structure)
-
-    def test_invalid_input_dict(self):
-        input_dict = {
-            "mode": "external",
-            "file": os.path.join(structure_dir, "CaTiO3.vasp"),
-            "string": "string",
-        }
-
-        with self.assertRaises(ValueError):
-            st.structure_model_from_input_dict(input_dict)
+    def test_conflicting_fields_raises(self):
+        with pytest.raises(ValueError):
+            st.structure_model_from_input_dict({
+                "mode": "external",
+                "file": str(STRUCTURES_DIR / "CaTiO3.vasp"),
+                "string": "string",
+            })
 
 
-class TestStructureMetaClass(unittest.TestCase):
-    perovskite_structure = Structure.from_file(
-        os.path.join(structure_dir, "CaTiO3.vasp")
-    )
+class TestStructureMeta:
+    @pytest.fixture(autouse=True)
+    def _ref(self):
+        self.perovskite_ref = Structure.from_file(STRUCTURES_DIR / "CaTiO3.vasp")
 
-    def test_valid_external_structure_meta(self):
-        input_dict = {
-            "mode": "external",
-            "file": os.path.join(structure_dir, "CaTiO3.vasp"),
-        }
+    def test_external(self):
+        model = st.StructureMeta.from_dict({
+            "mode": "external", "file": str(STRUCTURES_DIR / "CaTiO3.vasp")
+        })
+        assert isinstance(model.structure, Structure)
 
-        model = st.StructureMeta.from_dict(input_dict)
-        structure = model.structure
+    def test_prototype(self):
+        model = st.StructureMeta.from_dict({
+            "mode": "prototype", "species": ["Ca","Ti","O"],
+            "lattice": {"a": 3.889471}, "prototype": "perovskite",
+        })
+        s = model.structure
+        assert isinstance(s, Structure)
+        assert matrix_close(s.lattice.matrix, self.perovskite_ref.lattice.matrix)
 
-        self.assertIsInstance(structure, Structure)
+    def test_manual(self):
+        model = st.StructureMeta.from_dict({
+            "mode": "manual", "lattice": [[1,0,0],[0,1,0],[0,0,1]],
+            "species": ["Mg","O"], "coords": [[0,0,0],[0.5,0.5,0.5]],
+        })
+        assert isinstance(model.structure, Structure)
 
-    def test_valid_prototype_structure_meta(self):
-        input_dict = {
-            "mode": "prototype",
-            "species": ["Ca", "Ti", "O"],
-            "lattice": {"a": 3.889471},
-            "prototype": "perovskite",
-        }
-
-        model = st.StructureMeta.from_dict(input_dict)
-        structure = model.structure
-
-        self.assertIsInstance(structure, Structure)
-
-        generated_matrix = structure.lattice.matrix
-        # check if generated matrix is similar to the one in the file
-        self.assertTrue(
-            matrix_similarity(
-                generated_matrix, self.perovskite_structure.lattice.matrix
-            )
-        )
-
-    def test_valid_manual_structure_meta(self):
-        input_dict = {
-            "mode": "manual",
-            "lattice": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-            "species": ["Mg", "O"],
-            "coords": [[0, 0, 0], [0.5, 0.5, 0.5]],
-        }
-
-        model = st.StructureMeta.from_dict(input_dict)
-        structure = model.structure
-
-        self.assertIsInstance(structure, Structure)
-
-    def test_invalid_structure_meta(self):
-        input_dict = {
-            "mode": "external",
-            "file": os.path.join(structure_dir, "CaTiO3.vasp"),
-            "string": "string",
-        }
-
-        with self.assertRaises(ValueError):
-            st.StructureMeta.from_dict(input_dict)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_conflicting_fields_raises(self):
+        with pytest.raises(ValueError):
+            st.StructureMeta.from_dict({
+                "mode": "external",
+                "file": str(STRUCTURES_DIR / "CaTiO3.vasp"),
+                "string": "string",
+            })
