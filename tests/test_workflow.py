@@ -140,7 +140,7 @@ class TestMakeSubmitScript:
 class TestUserSlurmConfig:
     def test_user_cfg_merged_over_yaml(self, tmp_path, mock_slurm, monkeypatch):
         """Settings in ~/.config/abvio/slurm.yaml override the workflow YAML."""
-        user_cfg = tmp_path / "config.slurm"
+        user_cfg = tmp_path / "config.yaml"
         user_cfg.write_text("account: secret_project\npartition: special\n")
         monkeypatch.setattr(wf, "_USER_SLURM_CFG", user_cfg)
 
@@ -162,7 +162,7 @@ class TestUserSlurmConfig:
 
     def test_user_cfg_extra_in_slurm_cfg(self, tmp_path, mock_slurm, monkeypatch):
         """extra directives from the user file land in slurm_cfg and produce correct script."""
-        user_cfg = tmp_path / "config.slurm"
+        user_cfg = tmp_path / "config.yaml"
         user_cfg.write_text("extra:\n  - '--account=myproject'\n  - '-q high'\n")
         monkeypatch.setattr(wf, "_USER_SLURM_CFG", user_cfg)
 

@@ -138,7 +138,7 @@ def squeue_states(job_ids: list[str]) -> dict[str, str]:
     return states
 
 
-_USER_SLURM_CFG = Path.home() / ".config" / "abvio" / "config.slurm"
+_USER_SLURM_CFG = Path.home() / ".config" / "abvio" / "config.yaml"
 
 
 def _load_user_slurm_cfg() -> dict:
