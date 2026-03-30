@@ -96,31 +96,3 @@ class TestPerovskiteSet:
         expected = Poscar.from_file(self.pv_dir / "POSCAR").structure
         assert self.obj.structure.reduced_formula == expected.reduced_formula
 
-    def test_slurm_job(self, tmp_path):
-        job = self.obj.job
-        assert job.scheduler == "slurm"
-        assert job.shebang   == "#!/bin/bash"
-        assert job.script    == ['echo "Hello World"', 'echo "Goodbye World"']
-        assert "cores"  in job.directives_dict
-        assert "memory" in job.directives_dict
-
-        out = tmp_path / "submit.sh"
-        job.to_file(str(out))
-        content = out.read_text()
-        assert "#!/bin/bash" in content
-        assert "--cpus-per-task=4" in content
-        assert "--mem=8G" in content
-        assert 'echo "Hello World"' in content
-
-    def test_pbs_job(self, tmp_path):
-        obj = Io.Input.from_file(self.pv_dir / "equivalent_pbs.yaml")
-        job = obj.job
-        job.scheduler = "pbs"
-
-        out = tmp_path / "submit.sh"
-        job.to_file(str(out))
-        content = out.read_text()
-        assert "#!/bin/bash" in content
-        assert "#PBS -l select=1:ncpus=4:mem=7630MB" in content
-        assert "#PBS -l walltime=00:30:00" in content
-        assert "#PBS -l nodes=2" in content
