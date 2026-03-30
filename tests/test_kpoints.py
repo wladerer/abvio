@@ -109,19 +109,19 @@ class TestMonkhorstKpoints:
 class TestAutoLinemodeFromDict:
     def test_model_equality(self):
         manual = kp.AutoLineKpoints(spacing=20)
-        parsed = kp.AutoLineKpoints.validate({"mode": "autoline", "spacing": 20})
+        parsed = kp.AutoLineKpoints.model_validate({"mode": "autoline", "spacing": 20})
         assert parsed == manual
 
     def test_kpoints_object(self, fluorite):
-        model = kp.AutoLineKpoints.validate({"mode": "autoline", "spacing": 20})
+        model = kp.AutoLineKpoints.model_validate({"mode": "autoline", "spacing": 20})
         assert isinstance(model.kpoints(fluorite), Kpoints)
 
     def test_invalid_spacing(self):
         with pytest.raises(ValidationError):
-            kp.AutoLineKpoints.validate({"mode": "autoline", "spacing": 0.1})
+            kp.AutoLineKpoints.model_validate({"mode": "autoline", "spacing": 0.1})
 
     def test_surface(self, fluorite):
-        model = kp.SurfaceKpoints.validate({"mode": "surface", "spacing": 80000})
+        model = kp.SurfaceKpoints.model_validate({"mode": "surface", "spacing": 80000})
         assert isinstance(model.kpoints(fluorite), Kpoints)
 
 
@@ -131,19 +131,19 @@ class TestLinemodeFromDict:
 
     def test_model_equality(self):
         manual = kp.LineKpoints(spacing=30, paths=[[0,0,0],[0.5,0.5,0.5]], labels=["G","X"])
-        assert kp.LineKpoints.validate(self.LINE_DICT) == manual
+        assert kp.LineKpoints.model_validate(self.LINE_DICT) == manual
 
     def test_kpoints_object(self):
-        assert isinstance(kp.LineKpoints.validate(self.LINE_DICT).kpoints(), Kpoints)
+        assert isinstance(kp.LineKpoints.model_validate(self.LINE_DICT).kpoints(), Kpoints)
 
     def test_invalid_2d_paths(self):
         with pytest.raises(ValidationError):
-            kp.LineKpoints.validate({"mode": "line", "spacing": 30,
+            kp.LineKpoints.model_validate({"mode": "line", "spacing": 30,
                                      "paths": [[0,0],[0.5,0.5]], "labels": ["G","X"]})
 
     def test_insufficient_labels(self):
         with pytest.raises(ValidationError):
-            kp.LineKpoints.validate({"mode": "line", "spacing": 30,
+            kp.LineKpoints.model_validate({"mode": "line", "spacing": 30,
                                      "paths": [[0,0,0],[0.5,0.5,0.5]], "labels": ["G"]})
 
 

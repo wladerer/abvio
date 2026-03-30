@@ -319,17 +319,16 @@ class VaspWorkflow:
         """Submit all pending steps to Parsl. Returns a name→future mapping."""
         futures: dict[str, cf.Future] = {}
 
+        # Reset previously-failed steps so they are retried this run.
+        for step in self.steps.values():
+            if step.state == State.FAILED:
+                step.state = State.PENDING
+
         for step in self.steps.values():
             if step.state == State.DONE:
                 # Already done from a previous run — provide a resolved sentinel.
                 fut: cf.Future = cf.Future()
                 fut.set_result(True)
-                futures[step.name] = fut
-                continue
-
-            if step.state == State.FAILED:
-                fut = cf.Future()
-                fut.set_exception(RuntimeError(f"{step.name} previously failed"))
                 futures[step.name] = fut
                 continue
 

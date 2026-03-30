@@ -85,7 +85,7 @@ class TestManualStructure:
             ).structure
 
     def test_from_yaml(self):
-        model = st.ManualStructure.validate(
+        model = st.ManualStructure.model_validate(
             Io.load_abvio_yaml(FILES_DIR / "lattice_list.yaml")["structure"]
         )
         assert isinstance(model.structure, Structure)

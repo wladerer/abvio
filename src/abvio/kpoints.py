@@ -25,14 +25,14 @@ class KpointsMeta(type):
 
     @classmethod
     def from_dict(cls, kpoints_dictionary: dict):
-        base_model = BaseKpoints.validate(kpoints_dictionary)
+        base_model = BaseKpoints.model_validate(kpoints_dictionary)
         mode = base_model.mode
         KpointsClass = cls._registry.get(mode)
 
         if KpointsClass is None:
             raise ValueError(f"Unknown mode: {mode}")
 
-        return KpointsClass.validate(kpoints_dictionary)
+        return KpointsClass.model_validate(kpoints_dictionary)
 
 
 class CombinedMeta(KpointsMeta, ModelMetaclass):
@@ -299,7 +299,7 @@ class AutoLineKpoints(BaseKpoints):
 def kpoints_model_from_dictionary(kpoints_dictionary: dict) -> Kpoints:
     """Parses and validates a dictionary to create a Kpoints object according to the mode provided"""
 
-    base_model = BaseKpoints.validate(kpoints_dictionary)
+    base_model = BaseKpoints.model_validate(kpoints_dictionary)
 
     mode_model_map = {
         "gamma": GammaKpoints,
@@ -310,7 +310,7 @@ def kpoints_model_from_dictionary(kpoints_dictionary: dict) -> Kpoints:
     }
 
     BaseKpointsModel = mode_model_map.get(base_model.mode)
-    return BaseKpointsModel.validate(kpoints_dictionary)
+    return BaseKpointsModel.model_validate(kpoints_dictionary)
 
 
 def kpoints_from_dictionary(

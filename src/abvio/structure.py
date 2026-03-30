@@ -212,14 +212,14 @@ class StructureMeta(type):
 
     @classmethod
     def from_dict(cls, structure_dictionary: dict):
-        base_model = BaseStructure.validate(structure_dictionary)
+        base_model = BaseStructure.model_validate(structure_dictionary)
         mode = base_model.mode
         StructureClass = cls._registry.get(mode)
 
         if StructureClass is None:
             raise ValueError(f"Unknown mode: {mode}")
 
-        return StructureClass.validate(structure_dictionary)
+        return StructureClass.model_validate(structure_dictionary)
 
 
 class CombinedMeta(StructureMeta, ModelMetaclass):
@@ -400,7 +400,7 @@ def structure_model_from_input_dict(structure_dictionary: dict) -> Structure:
     """
 
 
-    base_model = BaseStructure.validate(structure_dictionary)
+    base_model = BaseStructure.model_validate(structure_dictionary)
 
     mode_model_map = {
         "manual": ManualStructure,
@@ -409,4 +409,4 @@ def structure_model_from_input_dict(structure_dictionary: dict) -> Structure:
     }
 
     BaseStructureModel = mode_model_map.get(base_model.mode)
-    return BaseStructureModel.validate(structure_dictionary)
+    return BaseStructureModel.model_validate(structure_dictionary)
