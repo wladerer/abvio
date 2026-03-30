@@ -274,5 +274,122 @@ def main():
     logger.info(f"Saved {len(jobs)} jobs into SQLite database at {args.output}")
 
 
+def init_merged_sqlite(db_path: Path, overwrite: bool = False):
+    """Initialize an SQLite database with a source column for merged databases."""
+    if db_path.exists() and overwrite:
+        logger.warning(f"Overwriting existing database at {db_path}")
+        db_path.unlink()
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS jobs (
+        id TEXT PRIMARY KEY,
+        composition TEXT,
+        energy REAL,
+        surface_area REAL,
+        converged INTEGER,
+        converged_electronic INTEGER,
+        converged_ionic INTEGER,
+        modified TEXT,
+        created TEXT,
+        path TEXT,
+        incar TEXT,
+        kpoints TEXT,
+        structure TEXT,
+        slab TEXT,
+        source TEXT
+    )
+    """)
+
+    conn.commit()
+    return conn
+
+
+def merge_databases(db_paths: List[Path], output_path: Path, overwrite: bool = False):
+    """Merge multiple job databases into one, adding a source column."""
+    out_conn = init_merged_sqlite(output_path, overwrite=overwrite)
+    out_cursor = out_conn.cursor()
+
+    total_inserted = 0
+    total_skipped = 0
+
+    for db_path in db_paths:
+        source_label = str(db_path.resolve())
+        in_conn = sqlite3.connect(db_path)
+        in_conn.row_factory = sqlite3.Row
+        in_cursor = in_conn.cursor()
+        in_cursor.execute("SELECT * FROM jobs")
+        rows = in_cursor.fetchall()
+        in_conn.close()
+
+        for row in rows:
+            try:
+                out_cursor.execute(
+                    """
+                    INSERT INTO jobs (
+                        id, composition, energy, surface_area,
+                        converged, converged_electronic, converged_ionic,
+                        modified, created, path,
+                        incar, kpoints, structure, slab, source
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row["id"],
+                        row["composition"],
+                        row["energy"],
+                        row["surface_area"],
+                        row["converged"],
+                        row["converged_electronic"],
+                        row["converged_ionic"],
+                        row["modified"],
+                        row["created"],
+                        row["path"],
+                        row["incar"],
+                        row["kpoints"],
+                        row["structure"],
+                        row["slab"],
+                        source_label,
+                    ),
+                )
+                total_inserted += 1
+            except sqlite3.IntegrityError:
+                logger.warning(f"Skipping duplicate id {row['id']} from {source_label}")
+                total_skipped += 1
+
+    out_conn.commit()
+    out_conn.close()
+    logger.info(
+        f"Merged {total_inserted} jobs ({total_skipped} duplicates skipped) into {output_path}"
+    )
+
+
+def merge_main():
+    parser = argparse.ArgumentParser(
+        description="Merge multiple VASP job SQLite databases into one."
+    )
+    parser.add_argument(
+        "databases", nargs="+", help="SQLite database files to merge"
+    )
+    parser.add_argument(
+        "-o", "--output", default="merged.sqlite", help="Output SQLite database file"
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite the output file if it exists",
+    )
+    args = parser.parse_args()
+
+    db_paths = [Path(p) for p in args.databases]
+    for p in db_paths:
+        if not p.exists():
+            logger.error(f"Database not found: {p}")
+            raise SystemExit(1)
+
+    merge_databases(db_paths, Path(args.output), overwrite=args.overwrite)
+
+
 if __name__ == "__main__":
     main()

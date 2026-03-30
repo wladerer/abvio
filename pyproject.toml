@@ -30,6 +30,7 @@ dev = ["pytest"]
 abvi = "abvio.cli:main"
 abvo = "abvio.outputs:main"
 abflow = "abvio.workflow:main"
+abmerge = "abvio.outputs:merge_main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
