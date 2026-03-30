@@ -1,89 +1,73 @@
 """
-Lightweight VASP workflow orchestrator.
+VASP workflow orchestrator using Parsl for HPC execution.
 
-Runs as a persistent polling daemon (e.g. inside tmux on an HPC login node).
-Submits VASP jobs via sbatch, monitors them via squeue, and advances the
-workflow graph when each step completes.
+Runs as a persistent job on an HPC login/service node. Builds a DAG of
+Parsl futures, submits each step to Slurm via HighThroughputExecutor, and
+advances the workflow graph as futures resolve.
 
 Usage
 -----
-    python -m abvio.workflow run mxenes.yaml
-    python -m abvio.workflow status mxenes.yaml
+    abflow run mxenes.yaml
+    abflow status mxenes.yaml
 
 Workflow YAML format
 --------------------
     name: v4c3_pv
-    root: /p/oldwork1/wladerer/mxenes_pv
-    poll_interval: 60          # seconds between squeue checks
+    root: /p/work1/wladerer/mxenes_pv
+    poll_interval: 60          # seconds between progress checks (default 60)
 
-    slurm:                     # default SLURM directives for all steps
-      partition: gpu
+    slurm:                     # SLURM directives forwarded to Parsl SlurmProvider
       nodes: 1
       ntasks: 128
       time: "12:00:00"
+      queue: standard          # -q flag; omit if using partition instead
+      partition: gpu           # --partition; omit if using queue instead
       vasp_cmd: mpirun vasp_std
+      modules:                 # loaded on compute nodes before VASP
+        - VASP/6.4.2
+      env:                     # exported on compute nodes
+        OMP_NUM_THREADS: 1
+      extra:                   # raw #SBATCH lines
+        - "--constraint=knl"
 
-    potcar_map:                # element → POTCAR label
+    potcar_map:
       V: V_pv
       C: C
-      O: O
-      H: H
 
     steps:
       - name: relax
         type: relax
-        structure: /path/to/monolayer.vasp
+        structure: /path/to/structure.vasp
 
       - name: scf
         type: scf
         depends: relax
 
-      - name: bands_nosoc
+      - name: bands
         type: bands
         depends: scf
-        soc: false
-
-      - name: scf_soc
-        type: scf
-        depends: relax
-        soc: true
-
-      - name: bands_soc
-        type: bands
-        depends: scf_soc
-        soc: true
-
-      - name: phonon
-        type: phonon
-        depends: relax
-        supercell: [3, 3, 1]
-
-      - name: adsorption_bare_H
-        type: adsorption
-        depends: relax
-        adsorbate: H
-
-      - name: soc_sp_bare_H
-        type: soc_singlepoint
-        depends: adsorption_bare_H
 """
 
 from __future__ import annotations
 
+import concurrent.futures as cf
 import json
 import logging
-import shutil
 import subprocess
 import time
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
+import parsl
 import yaml
-from pymatgen.core import Structure
-from pymatgen.io.vasp.inputs import Incar, Kpoints, Poscar, Potcar
-from pymatgen.io.vasp.outputs import Vasprun
-from pymatgen.io.vasp.sets import VaspInput
+from parsl.app.app import python_app
+from parsl.config import Config
+from parsl.executors import HighThroughputExecutor
+from parsl.launchers import SrunLauncher
+from parsl.providers import SlurmProvider
+
+from abvio.steps import PREP_FUNCTIONS, check_convergence, step_info
 
 log = logging.getLogger(__name__)
 
@@ -93,56 +77,128 @@ log = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class State(str, Enum):
-    PENDING  = "pending"    # waiting for dependencies
-    READY    = "ready"      # deps done, not yet submitted
-    RUNNING  = "running"    # sbatch submitted, job in queue/running
-    DONE     = "done"       # finished + converged
-    FAILED   = "failed"     # finished but not converged
+    PENDING = "pending"   # waiting for dependencies
+    RUNNING = "running"   # submitted to Parsl / in queue or executing
+    DONE    = "done"      # finished + converged
+    FAILED  = "failed"    # finished but not converged, or error
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SLURM interface
+# Parsl configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-def sbatch(directory: Path, slurm_cfg: dict) -> str:
-    """Write a submit script and call sbatch. Returns job ID."""
-    script = _make_submit_script(directory, slurm_cfg)
-    script_path = directory / "submit.sh"
-    script_path.write_text(script)
+def make_parsl_config(slurm_cfg: dict, run_dir: str | Path) -> Config:
+    """Build a Parsl Config with a SlurmProvider from the workflow slurm_cfg."""
+    scheduler_options = ""
+    if "account" in slurm_cfg:
+        scheduler_options += f"#SBATCH --account={slurm_cfg['account']}\n"
+    if "queue" in slurm_cfg:
+        scheduler_options += f"#SBATCH -q {slurm_cfg['queue']}\n"
+    if "partition" in slurm_cfg:
+        scheduler_options += f"#SBATCH --partition={slurm_cfg['partition']}\n"
+    for extra in slurm_cfg.get("extra", []):
+        scheduler_options += f"#SBATCH {extra}\n"
 
-    result = subprocess.run(
-        ["sbatch", str(script_path)],
-        capture_output=True, text=True, cwd=str(directory),
+    worker_init_lines = []
+    for mod in slurm_cfg.get("modules", []):
+        worker_init_lines.append(f"module load {mod}")
+    for key, val in slurm_cfg.get("env", {}).items():
+        worker_init_lines.append(f"export {key}={val}")
+    if "worker_init" in slurm_cfg:
+        worker_init_lines.insert(0, slurm_cfg["worker_init"])
+    worker_init = "\n".join(worker_init_lines)
+
+    provider = SlurmProvider(
+        nodes_per_block=slurm_cfg.get("nodes", 1),
+        cores_per_node=slurm_cfg.get("ntasks", 128),
+        walltime=slurm_cfg.get("time", "12:00:00"),
+        scheduler_options=scheduler_options,
+        worker_init=worker_init,
+        max_blocks=slurm_cfg.get("max_jobs", 8),
+        launcher=SrunLauncher(),
     )
+
+    return Config(
+        executors=[
+            HighThroughputExecutor(
+                label="vasp_htex",
+                max_workers_per_node=1,
+                provider=provider,
+            )
+        ],
+        run_dir=str(run_dir),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Parsl app
+# ─────────────────────────────────────────────────────────────────────────────
+
+@python_app
+def run_step(
+    step_name: str,
+    step_type: str,
+    step_cfg: dict,
+    step_dir: str,
+    prev_dir: str | None,
+    potcar_map: dict,
+    vasp_cmd: str,
+    inputs: list = [],
+) -> bool:
+    """Prepare VASP inputs and run VASP. Executes on a Parsl compute worker.
+
+    Returns True if converged, False if not. Raises on prep or execution error.
+    """
+    import subprocess
+    import logging
+    import subprocess
+    from pathlib import Path
+    from abvio.steps import PREP_FUNCTIONS, check_convergence, step_info
+
+    _log = logging.getLogger(__name__)
+    dst  = Path(step_dir)
+    prev = Path(prev_dir) if prev_dir else None
+
+    prep_fn = PREP_FUNCTIONS.get(step_type)
+    if prep_fn is None:
+        raise ValueError(f"Unknown step type: {step_type!r}")
+
+    prep_fn(dst, step_cfg, prev, potcar_map)
+    _log.info(f"[{step_name}] inputs written, launching VASP")
+
+    result = subprocess.run(vasp_cmd.split(), cwd=str(dst),
+                            capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"sbatch failed: {result.stderr}")
+        raise RuntimeError(
+            f"VASP failed in {step_dir} (exit {result.returncode}):\n{result.stderr}"
+        )
 
-    job_id = result.stdout.strip().split()[-1]
-    log.info(f"Submitted {directory.name} → job {job_id}")
-    return job_id
+    converged = check_convergence(dst)
 
-
-def squeue_states(job_ids: list[str]) -> dict[str, str]:
-    """Return {job_id: state} for all given job IDs. Missing = completed."""
-    if not job_ids:
-        return {}
-    result = subprocess.run(
-        ["squeue", "--jobs", ",".join(job_ids), "--format=%i %t", "--noheader"],
-        capture_output=True, text=True,
+    # Log convergence summary without loading vasprun.xml
+    info = step_info(dst)
+    e_str   = f"{info.final_energy:.4f} eV" if info.final_energy is not None else "n/a"
+    scf_str = "yes" if info.electronic_converged else ("no" if info.electronic_converged is False else "?")
+    ion_str = ("yes" if info.ionic_converged
+               else ("no" if info.ionic_converged is False
+                     else f"{info.n_ionic_steps} steps" if info.n_ionic_steps else "n/a"))
+    _log.info(
+        f"[{step_name}] done | electronic: {scf_str} | ionic: {ion_str} | "
+        f"E={e_str} | converged={converged}"
     )
-    states = {}
-    for line in result.stdout.strip().splitlines():
-        parts = line.split()
-        if len(parts) == 2:
-            states[parts[0]] = parts[1]
-    return states
 
+    return converged
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Daemon submit script (for the abflow daemon job itself)
+# ─────────────────────────────────────────────────────────────────────────────
 
 _USER_SLURM_CFG = Path.home() / ".config" / "abvio" / "config.yaml"
 
 
 def _load_user_slurm_cfg() -> dict:
-    """Load ~/.config/abvio/slurm.yaml if it exists; silently return {} otherwise."""
+    """Load ~/.config/abvio/config.yaml if it exists; silently return {} otherwise."""
     if _USER_SLURM_CFG.exists():
         with open(_USER_SLURM_CFG) as f:
             return yaml.safe_load(f) or {}
@@ -150,6 +206,7 @@ def _load_user_slurm_cfg() -> dict:
 
 
 def _make_submit_script(directory: Path, slurm_cfg: dict) -> str:
+    """Generate a Slurm batch script for the abflow daemon job."""
     nodes    = slurm_cfg.get("nodes", 1)
     ntasks   = slurm_cfg.get("ntasks", 128)
     time_    = slurm_cfg.get("time", "12:00:00")
@@ -186,201 +243,6 @@ def _make_submit_script(directory: Path, slurm_cfg: dict) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Convergence check
-# ─────────────────────────────────────────────────────────────────────────────
-
-def check_convergence(directory: Path) -> bool:
-    vr_path = directory / "vasprun.xml"
-    if not vr_path.exists():
-        return False
-    try:
-        vr = Vasprun(
-            str(vr_path),
-            parse_potcar_file=False,
-            parse_projected_eigen=False,
-            parse_eigen=False,
-        )
-        return vr.converged
-    except Exception as e:
-        log.warning(f"Could not parse {vr_path}: {e}")
-        return False
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# INCAR / POTCAR builders
-# ─────────────────────────────────────────────────────────────────────────────
-
-def ldau_for_structure(structure: Structure, u_vals: dict) -> dict:
-    """Build LDAUL/U/J lists ordered by structure species. u_vals: {El: (L, U, J)}."""
-    species = list(dict.fromkeys(str(s.specie) for s in structure))
-    return {
-        "LDAUL": [u_vals.get(sp, (-1, 0.0, 0.0))[0] for sp in species],
-        "LDAUU": [u_vals.get(sp, (-1, 0.0, 0.0))[1] for sp in species],
-        "LDAUJ": [u_vals.get(sp, (-1, 0.0, 0.0))[2] for sp in species],
-    }
-
-
-def potcar_for_structure(structure: Structure, potcar_map: dict) -> Potcar:
-    species  = list(dict.fromkeys(str(s.specie) for s in structure))
-    symbols  = [potcar_map.get(sp, sp) for sp in species]
-    return Potcar(symbols=symbols, functional="PBE")
-
-
-BASE_INCAR = {
-    "ALGO":      "All",
-    "EDIFF":     1e-6,
-    "ENCUT":     550,
-    "ISMEAR":    0,
-    "SIGMA":     0.05,
-    "ISPIN":     1,
-    "ISYM":      0,
-    "IVDW":      12,
-    "KPAR":      4,
-    "LASPH":     True,
-    "LCHARG":    False,
-    "LDAU":      True,
-    "LDAUPRINT": 1,
-    "LDAUTYPE":  2,
-    "LMAXMIX":   4,
-    "LORBIT":    11,
-    "LREAL":     False,
-    "LWAVE":     False,
-    "NCORE":     16,
-    "NELM":      300,
-    "NSW":       0,
-    "PREC":      "Accurate",
-}
-
-U_VALS = {"V": (2, 2.5, 0.0)}   # extend as needed
-
-
-def write_vasp_input(directory: Path, structure: Structure,
-                     incar_updates: dict, kpoints: Kpoints,
-                     potcar_map: dict):
-    """Write INCAR, POSCAR, KPOINTS, POTCAR to directory."""
-    directory.mkdir(parents=True, exist_ok=True)
-    poscar = Poscar(structure)
-    potcar = potcar_for_structure(structure, potcar_map)
-    incar  = Incar({**BASE_INCAR,
-                    **ldau_for_structure(structure, U_VALS),
-                    **incar_updates})
-    VaspInput(incar=incar, kpoints=kpoints,
-              poscar=poscar, potcar=potcar).write_input(str(directory))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Step preparation functions
-# ─────────────────────────────────────────────────────────────────────────────
-
-KPOINTS_SCF   = Kpoints.gamma_automatic((18, 18, 1))
-KPOINTS_BULK  = Kpoints.gamma_automatic((18, 18, 4))
-KPOINTS_COARSE = Kpoints.gamma_automatic((9, 9, 1))
-
-
-def prep_relax(dst: Path, cfg: dict, _prev: Path | None, potcar_map: dict):
-    structure = Structure.from_file(cfg["structure"])
-    write_vasp_input(dst, structure,
-                     {"NSW": 200, "IBRION": 2, "ISIF": 2,
-                      "EDIFFG": -0.02, "LWAVE": True, "LCHARG": True},
-                     KPOINTS_COARSE, potcar_map)
-
-
-def prep_scf(dst: Path, cfg: dict, prev: Path, potcar_map: dict):
-    structure = Structure.from_file(str(prev / "CONTCAR"))
-    soc       = cfg.get("soc", False)
-    updates   = {"ISTART": 0, "LWAVE": True, "LCHARG": True}
-    if soc:
-        updates.update({"LSORBIT": True, "NBANDS": 64, "SAXIS": [0, 0, 1]})
-    write_vasp_input(dst, structure, updates, KPOINTS_SCF, potcar_map)
-
-
-def prep_bands(dst: Path, cfg: dict, prev: Path, potcar_map: dict):
-    """prev is the SCF directory. Copies CHGCAR and writes line-mode KPOINTS."""
-    scf_dir   = prev
-    structure = Structure.from_file(str(scf_dir / "CONTCAR"))
-    soc       = cfg.get("soc", False)
-
-    kpoints = _line_kpoints(structure)
-    updates = {"ISTART": 1, "ICHARG": 11, "LORBIT": 11, "NSW": 0,
-               "LWAVE": False, "LCHARG": False, "ISMEAR": 0, "SIGMA": 0.01}
-    if soc:
-        updates.update({"LSORBIT": True, "NBANDS": 64, "SAXIS": [0, 0, 1]})
-
-    write_vasp_input(dst, structure, updates, kpoints, potcar_map)
-    shutil.copy(scf_dir / "CHGCAR", dst / "CHGCAR")
-
-
-def prep_phonon(dst: Path, cfg: dict, prev: Path, potcar_map: dict):
-    """Create phonopy displaced supercells after relaxation."""
-    import phonopy
-    from phonopy.interface.vasp import write_vasp
-
-    structure = Structure.from_file(str(prev / "CONTCAR"))
-    sc_matrix = cfg.get("supercell", [3, 3, 1])
-
-    ph = phonopy.Phonopy(
-        _pmg_to_phonopy_atoms(structure),
-        supercell_matrix=[[sc_matrix[0], 0, 0],
-                          [0, sc_matrix[1], 0],
-                          [0, 0, sc_matrix[2]]],
-    )
-    ph.generate_displacements(distance=0.01)
-    ph.save(str(dst / "phonopy_params.yaml"))
-
-    disp_dir = dst / "displacements"
-    disp_dir.mkdir(exist_ok=True)
-    for i, sc in enumerate(ph.supercells_with_displacements):
-        d = disp_dir / f"disp-{i+1:03d}"
-        d.mkdir(exist_ok=True)
-        write_vasp(str(d / "POSCAR"), sc)
-        sc_struct = _phonopy_atoms_to_pmg(sc, structure)
-        write_vasp_input(d, sc_struct,
-                         {"NSW": 0, "IBRION": -1, "LWAVE": False, "LCHARG": False,
-                          "PREC": "Accurate"},
-                         Kpoints.gamma_automatic((6, 6, 1)), potcar_map)
-
-    log.info(f"Created {len(ph.supercells_with_displacements)} displacement dirs")
-
-
-def prep_soc_singlepoint(dst: Path, cfg: dict, prev: Path, potcar_map: dict):
-    """SOC single-point on the geometry from a completed adsorption run."""
-    structure = Structure.from_file(str(prev / "CONTCAR"))
-    write_vasp_input(dst, structure,
-                     {"LSORBIT": True, "NBANDS": 64, "SAXIS": [0, 0, 1],
-                      "NSW": 0, "LWAVE": False, "LCHARG": False},
-                     KPOINTS_SCF, potcar_map)
-
-
-def prep_adsorption(dst: Path, cfg: dict, prev: Path, potcar_map: dict):
-    """Place adsorbate on relaxed slab using tinykit adsorb."""
-    from tinykit.adsorb import get_molecule, adsorb
-
-    slab      = Structure.from_file(str(prev / "CONTCAR"))
-    molecule  = get_molecule(cfg["adsorbate"])
-    structures = adsorb(slab, molecule)
-
-    if not structures:
-        raise RuntimeError(f"No adsorption sites found for {cfg['adsorbate']}")
-
-    # Take the first (lowest-energy site from AdsorbateSiteFinder)
-    structure = structures[0]
-    write_vasp_input(dst, structure,
-                     {"NSW": 100, "IBRION": 2, "ISIF": 2,
-                      "EDIFFG": -0.02, "LWAVE": False, "LCHARG": False},
-                     KPOINTS_SCF, potcar_map)
-
-
-PREP_FUNCTIONS: dict[str, Callable] = {
-    "relax":           prep_relax,
-    "scf":             prep_scf,
-    "bands":           prep_bands,
-    "phonon":          prep_phonon,
-    "soc_singlepoint": prep_soc_singlepoint,
-    "adsorption":      prep_adsorption,
-}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Workflow
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -389,10 +251,10 @@ class WorkflowStep:
         self.name    = cfg["name"]
         self.type    = cfg["type"]
         self.cfg     = cfg
-        self.depends = cfg.get("depends")          # name of parent step, or None
+        self.depends = cfg.get("depends")
         self.dir     = workspace / cfg.get("dir", cfg["name"])
         self.state   = State.PENDING
-        self.job_id  = None
+        self.job_id  = None   # unused with Parsl; kept for JSON schema compatibility
 
     def to_dict(self) -> dict:
         return {"name": self.name, "state": self.state.value,
@@ -406,12 +268,11 @@ class VaspWorkflow:
         with open(config_path) as f:
             self.cfg = yaml.safe_load(f)
 
-        self.name         = self.cfg["name"]
-        self.root         = Path(self.cfg["root"])
-        self.workspace    = self.root / self.cfg.get("workspace", "workspace")
-        # User-local overrides (~/.config/abvio/config.yaml) win over the workflow YAML.
-        self.slurm_cfg    = {**self.cfg.get("slurm", {}), **_load_user_slurm_cfg()}
-        self.potcar_map   = self.cfg.get("potcar_map", {})
+        self.name          = self.cfg["name"]
+        self.root          = Path(self.cfg["root"])
+        self.workspace     = self.root / self.cfg.get("workspace", "workspace")
+        self.slurm_cfg     = {**self.cfg.get("slurm", {}), **_load_user_slurm_cfg()}
+        self.potcar_map    = self.cfg.get("potcar_map", {})
         self.poll_interval = self.cfg.get("poll_interval", 60)
 
         self.steps: dict[str, WorkflowStep] = {}
@@ -452,110 +313,141 @@ class VaspWorkflow:
         parent = self._parent(step)
         return parent is None or parent.state == State.DONE
 
-    # ── core loop ─────────────────────────────────────────────────────────────
+    # ── DAG construction ──────────────────────────────────────────────────────
 
-    def run(self):
-        log.info(f"Starting workflow '{self.name}'")
-        while True:
-            self._tick()
-            terminal = {State.DONE, State.FAILED}
-            if all(s.state in terminal for s in self.steps.values()):
-                break
-            if not self._can_make_progress():
-                log.warning("No further progress possible (blocked by failed steps)")
-                break
-            time.sleep(self.poll_interval)
-        self._print_status()
+    def _build_dag(self) -> dict[str, cf.Future]:
+        """Submit all pending steps to Parsl. Returns a name→future mapping."""
+        futures: dict[str, cf.Future] = {}
 
-    def _can_make_progress(self) -> bool:
-        """Return True if any step is running or could be submitted."""
-        for s in self.steps.values():
-            if s.state in (State.RUNNING, State.READY):
-                return True
-            if s.state == State.PENDING:
-                parent = self._parent(s)
-                if parent is None or parent.state == State.DONE:
-                    return True
-        return False
-
-    def _tick(self):
-        # 1. Update running jobs
-        running = {s.name: s for s in self.steps.values()
-                   if s.state == State.RUNNING and s.job_id}
-        if running:
-            live = squeue_states([s.job_id for s in running.values()])
-            for name, step in running.items():
-                if step.job_id not in live:
-                    # Job left the queue — check convergence
-                    if check_convergence(step.dir):
-                        step.state = State.DONE
-                        log.info(f"[DONE]   {name}")
-                    else:
-                        step.state = State.FAILED
-                        log.warning(f"[FAILED] {name} — check {step.dir}")
-
-        # 2. Submit newly ready steps
         for step in self.steps.values():
-            if self._ready(step):
-                step.state = State.READY
-                try:
-                    self._prepare_and_submit(step)
-                except Exception as e:
-                    step.state = State.FAILED
-                    log.error(f"Preparation failed for {step.name}: {e}")
+            if step.state == State.DONE:
+                # Already done from a previous run — provide a resolved sentinel.
+                fut: cf.Future = cf.Future()
+                fut.set_result(True)
+                futures[step.name] = fut
+                continue
 
-        self._save_state()
+            if step.state == State.FAILED:
+                fut = cf.Future()
+                fut.set_exception(RuntimeError(f"{step.name} previously failed"))
+                futures[step.name] = fut
+                continue
 
-    def _prepare_and_submit(self, step: WorkflowStep):
-        parent = self._parent(step)
-        prev_dir = parent.dir if parent else None
+            parent      = self._parent(step)
+            dep_futures = [futures[parent.name]] if parent else []
+            prev_dir    = str(parent.dir) if parent else None
 
-        prep_fn = PREP_FUNCTIONS.get(step.type)
-        if prep_fn is None:
-            raise ValueError(f"Unknown step type: {step.type}")
+            futures[step.name] = run_step(
+                step_name=step.name,
+                step_type=step.type,
+                step_cfg=step.cfg,
+                step_dir=str(step.dir),
+                prev_dir=prev_dir,
+                potcar_map=self.potcar_map,
+                vasp_cmd=self.slurm_cfg.get("vasp_cmd", "mpirun vasp_std"),
+                inputs=dep_futures,
+            )
+            step.state = State.RUNNING
 
-        log.info(f"Preparing {step.name} ({step.type}) …")
-        prep_fn(step.dir, step.cfg, prev_dir, self.potcar_map)
+        return futures
 
-        step.job_id = sbatch(step.dir, self.slurm_cfg)
-        step.state  = State.RUNNING
+    # ── monitoring ────────────────────────────────────────────────────────────
+
+    def _monitor(self, futures: dict[str, cf.Future]) -> None:
+        """Poll futures until all complete, updating step states as they finish."""
+        # Only monitor steps that were actually submitted this run.
+        active = {
+            name: fut for name, fut in futures.items()
+            if self.steps[name].state == State.RUNNING
+        }
+        reverse = {id(fut): name for name, fut in active.items()}
+
+        for completed in cf.as_completed(list(active.values())):
+            name = reverse[id(completed)]
+            step = self.steps[name]
+            try:
+                converged = completed.result()
+                step.state = State.DONE if converged else State.FAILED
+                log.info(f"[{'DONE' if converged else 'NOT CONVERGED'}] {name}")
+            except Exception as e:
+                step.state = State.FAILED
+                log.error(f"[FAILED] {name}: {e}")
+            self._save_state()
+
+    # ── run ───────────────────────────────────────────────────────────────────
+
+    def run(self) -> None:
+        log.info(f"Starting workflow '{self.name}'")
+        cfg = make_parsl_config(self.slurm_cfg,
+                                run_dir=self.root / "parsl_runinfo")
+        parsl.load(cfg)
+        try:
+            futures = self._build_dag()
+            self._save_state()
+            self._monitor(futures)
+        finally:
+            parsl.clear()
+        self._print_status()
 
     # ── status display ────────────────────────────────────────────────────────
 
     def _print_status(self):
         print(f"\nWorkflow: {self.name}")
-        print(f"{'Step':<30} {'Type':<18} {'State':<10} {'Job ID'}")
-        print("-" * 70)
+        print(f"{'Step':<30} {'Type':<18} {'State'}")
+        print("-" * 60)
         for step in self.steps.values():
-            print(f"{step.name:<30} {step.type:<18} "
-                  f"{step.state.value:<10} {step.job_id or ''}")
+            print(f"{step.name:<30} {step.type:<18} {step.state.value}")
 
+    def _print_monitor(self):
+        from datetime import datetime
+        from rich.console import Console
+        from rich.table import Table
 
-# ─────────────────────────────────────────────────────────────────────────────
-# phonopy ↔ pymatgen helpers (minimal, no extra deps)
-# ─────────────────────────────────────────────────────────────────────────────
+        table = Table(title=f"Workflow: {self.name}  [{datetime.now().strftime('%H:%M:%S')}]")
+        table.add_column("Step",       style="bold")
+        table.add_column("Type",       style="dim")
+        table.add_column("State")
+        table.add_column("Electronic", justify="center")
+        table.add_column("Ionic",      justify="center")
+        table.add_column("Ion. Steps", justify="right")
+        table.add_column("Energy (eV)", justify="right")
+        table.add_column("dE (eV)",    justify="right")
 
-def _pmg_to_phonopy_atoms(structure: Structure):
-    from phonopy.structure.atoms import PhonopyAtoms
-    import numpy as np
-    return PhonopyAtoms(
-        symbols=[str(s.specie) for s in structure],
-        cell=structure.lattice.matrix,
-        scaled_positions=structure.frac_coords,
-    )
+        STATE_STYLE = {
+            State.PENDING: "dim",
+            State.RUNNING: "yellow",
+            State.DONE:    "green",
+            State.FAILED:  "red bold",
+        }
 
+        for step in self.steps.values():
+            style    = STATE_STYLE.get(step.state, "")
+            state_s  = f"[{style}]{step.state.value}[/{style}]"
 
-def _phonopy_atoms_to_pmg(atoms, ref: Structure) -> Structure:
-    from pymatgen.core import Lattice
-    import numpy as np
-    lattice = Lattice(atoms.cell)
-    return Structure(lattice, atoms.symbols, atoms.scaled_positions)
+            if step.state in (State.PENDING,):
+                table.add_row(step.name, step.type, state_s, "-", "-", "-", "-", "-")
+                continue
 
+            info = step_info(step.dir)
 
-def _line_kpoints(structure: Structure) -> Kpoints:
-    from pymatgen.symmetry.bandstructure import HighSymmKpath
-    kpath = HighSymmKpath(structure)
-    return Kpoints.automatic_linemode(divisions=40, ibz=kpath)
+            if not info.available:
+                table.add_row(step.name, step.type, state_s, "-", "-", "-", "-", "-")
+                continue
+
+            scf = ("✓" if info.electronic_converged
+                   else ("✗" if info.electronic_converged is False
+                         else f"iter {info.current_scf_iter}"))
+            ion = ("✓" if info.ionic_converged
+                   else ("✗" if info.ionic_converged is False
+                         else ("n/a" if info.n_ionic_steps <= 1 else f"{info.n_ionic_steps}")))
+            n_ion = str(info.n_ionic_steps) if info.n_ionic_steps else "-"
+            energy = f"{info.final_energy:.5f}" if info.final_energy is not None else "-"
+            de     = (f"{info.energy_change:+.5f}" if info.energy_change is not None
+                      else "-")
+
+            table.add_row(step.name, step.type, state_s, scf, ion, n_ion, energy, de)
+
+        Console().print(table)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -564,11 +456,14 @@ def _line_kpoints(structure: Structure) -> Kpoints:
 
 def main():
     import argparse
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s")
 
     ap = argparse.ArgumentParser(description="VASP workflow runner")
-    ap.add_argument("command", choices=["run", "status"])
+    ap.add_argument("command", choices=["run", "status", "monitor"])
     ap.add_argument("config", help="Workflow YAML file")
+    ap.add_argument("--watch", type=int, metavar="SECONDS",
+                    help="Re-print monitor table every N seconds (monitor only)")
     args = ap.parse_args()
 
     wf = VaspWorkflow(args.config)
@@ -577,6 +472,19 @@ def main():
     elif args.command == "status":
         wf._load_state()
         wf._print_status()
+    elif args.command == "monitor":
+        wf._load_state()
+        if args.watch:
+            import time as _time
+            try:
+                while True:
+                    wf._load_state()
+                    wf._print_monitor()
+                    _time.sleep(args.watch)
+            except KeyboardInterrupt:
+                pass
+        else:
+            wf._print_monitor()
 
 
 if __name__ == "__main__":

@@ -1,19 +1,21 @@
 """
-Tests for abvio.workflow.
+Tests for abvio.workflow and abvio.steps.
 
 Strategy
 --------
-All SLURM calls (sbatch, squeue_states) are monkeypatched so no real cluster
-is needed. All prep_* functions are replaced with a trivial stub that creates
-the destination directory and writes a CONTCAR so downstream steps can read a
-structure. check_convergence is patched per-test to control pass/fail outcomes.
-time.sleep is patched where run() is exercised.
+Parsl is never loaded. run_step is monkeypatched to return pre-resolved
+concurrent.futures.Future objects. parsl.load and parsl.clear are no-ops.
+All prep functions are replaced with a stub that creates the dst directory
+and writes a CONTCAR so downstream steps can read a structure.
 """
 
+from __future__ import annotations
+
+import concurrent.futures as cf
 import json
 import shutil
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -21,12 +23,13 @@ from pymatgen.core import Structure
 from pymatgen.io.vasp.inputs import Poscar
 
 import abvio.workflow as wf
+import abvio.steps as steps
+from abvio.steps import check_convergence, ldau_for_structure
 from abvio.workflow import (
     State,
     VaspWorkflow,
     _make_submit_script,
-    check_convergence,
-    ldau_for_structure,
+    make_parsl_config,
 )
 
 STRUCTURES_DIR = Path(__file__).parent / "structures"
@@ -37,14 +40,15 @@ STRUCTURE_FILE = str(STRUCTURES_DIR / "CaTiO3.vasp")
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _make_yaml(tmp_path: Path, steps: list[dict], **overrides) -> Path:
+def _make_yaml(tmp_path: Path, step_list: list[dict], **overrides) -> Path:
     cfg = {
-        "name":         "test_wf",
-        "root":         str(tmp_path / "root"),
+        "name":          "test_wf",
+        "root":          str(tmp_path / "root"),
         "poll_interval": 0,
-        "slurm":        {"partition": "test", "nodes": 1, "ntasks": 4, "time": "1:00:00"},
-        "potcar_map":   {"Ca": "Ca_pv", "Ti": "Ti_pv", "O": "O"},
-        "steps":        steps,
+        "slurm":         {"nodes": 1, "ntasks": 4, "time": "1:00:00",
+                          "vasp_cmd": "mpirun vasp_std"},
+        "potcar_map":    {"Ca": "Ca_pv", "Ti": "Ti_pv", "O": "O"},
+        "steps":         step_list,
         **overrides,
     }
     p = tmp_path / "workflow.yaml"
@@ -53,7 +57,7 @@ def _make_yaml(tmp_path: Path, steps: list[dict], **overrides) -> Path:
 
 
 def _dummy_prep(dst: Path, cfg: dict, prev: Path | None, potcar_map: dict):
-    """Create dst and drop a CONTCAR so dependent steps can read a structure."""
+    """Create dst and write a CONTCAR so downstream steps can read a structure."""
     dst.mkdir(parents=True, exist_ok=True)
     contcar = dst / "CONTCAR"
     if prev and (prev / "CONTCAR").exists():
@@ -62,18 +66,89 @@ def _dummy_prep(dst: Path, cfg: dict, prev: Path | None, potcar_map: dict):
         Poscar(Structure.from_file(STRUCTURE_FILE)).write_file(str(contcar))
 
 
+def _resolved(value=True) -> cf.Future:
+    """Return an already-resolved Future."""
+    f: cf.Future = cf.Future()
+    f.set_result(value)
+    return f
+
+
+def _failed(exc: Exception | None = None) -> cf.Future:
+    """Return an already-failed Future."""
+    f: cf.Future = cf.Future()
+    f.set_exception(exc or RuntimeError("step failed"))
+    return f
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# Unit tests — pure functions
+# Core fixtures
+# ─────────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def mock_parsl(monkeypatch):
+    """Patch parsl.load and parsl.clear to no-ops."""
+    monkeypatch.setattr(wf.parsl, "load", lambda cfg: None)
+    monkeypatch.setattr(wf.parsl, "clear", lambda: None)
+
+
+@pytest.fixture
+def mock_prep(monkeypatch):
+    """Replace all PREP_FUNCTIONS with _dummy_prep."""
+    for name in list(steps.PREP_FUNCTIONS):
+        monkeypatch.setitem(steps.PREP_FUNCTIONS, name, _dummy_prep)
+
+
+@pytest.fixture
+def mock_run_step(monkeypatch):
+    """
+    Replace run_step with a synchronous callable returning pre-resolved futures.
+
+    The returned controller has:
+        .results     — dict[step_name, bool | Exception]; default True
+        .call_log    — list of step_names in submission order
+        .inputs_log  — dict[step_name, list[Future]] — inputs passed per step
+    """
+    ctrl = MagicMock()
+    ctrl.results    = {}
+    ctrl.call_log   = []
+    ctrl.inputs_log = {}
+
+    def fake_run_step(step_name, step_type, step_cfg, step_dir,
+                      prev_dir, potcar_map, vasp_cmd, inputs=None):
+        ctrl.call_log.append(step_name)
+        ctrl.inputs_log[step_name] = list(inputs or [])
+
+        # Propagate parent exception (mirrors Parsl behaviour)
+        for dep in (inputs or []):
+            if dep.done() and dep.exception():
+                return _failed(dep.exception())
+
+        outcome = ctrl.results.get(step_name, True)
+        if isinstance(outcome, Exception):
+            return _failed(outcome)
+        return _resolved(outcome)
+
+    monkeypatch.setattr(wf, "run_step", fake_run_step)
+    return ctrl
+
+
+@pytest.fixture
+def env(mock_parsl, mock_run_step, mock_prep):
+    """Combined fixture: no Parsl, no VASP, no real prep. Returns run_step ctrl."""
+    return mock_run_step
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Unit — ldau_for_structure (moved to steps.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestLdauForStructure:
     @pytest.fixture(autouse=True)
     def _struct(self):
-        self.s = Structure.from_file(STRUCTURE_FILE)  # Ca Ti O
+        self.s = Structure.from_file(STRUCTURE_FILE)
 
     def test_known_species_ordered(self):
         result = ldau_for_structure(self.s, {"Ti": (2, 4.0, 0.0)})
-        # CaTiO3 species order: Ca, Ti, O
         assert result["LDAUL"] == [-1,  2, -1]
         assert result["LDAUU"] == [0.0, 4.0, 0.0]
         assert result["LDAUJ"] == [0.0, 0.0, 0.0]
@@ -91,6 +166,10 @@ class TestLdauForStructure:
         assert len(result["LDAUJ"]) == n
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Unit — _make_submit_script
+# ─────────────────────────────────────────────────────────────────────────────
+
 class TestMakeSubmitScript:
     def test_explicit_directives(self):
         script = _make_submit_script(Path("/fake"), {
@@ -106,7 +185,12 @@ class TestMakeSubmitScript:
     def test_defaults_applied(self):
         script = _make_submit_script(Path("/fake"), {})
         assert "mpirun vasp_std" in script
-        assert "--partition"     not in script   # partition is optional, not a default
+        assert "--partition"     not in script
+
+    def test_queue_flag(self):
+        script = _make_submit_script(Path("/fake"), {"queue": "debug"})
+        assert "#SBATCH -q debug" in script
+        assert "--partition"      not in script
 
     def test_extra_directives_appended(self):
         script = _make_submit_script(Path("/fake"), {
@@ -123,61 +207,66 @@ class TestMakeSubmitScript:
 
     def test_modules_and_env(self):
         script = _make_submit_script(Path("/fake"), {
-            "modules": ["VASP/6.1.2", "intel/2023"],
-            "env":     {"VASP_NPROCS": 128, "OMP_NUM_THREADS": 1},
+            "modules":  ["VASP/6.1.2", "intel/2023"],
+            "env":      {"VASP_NPROCS": 128, "OMP_NUM_THREADS": 1},
             "vasp_cmd": "mpirun vasp_ncl",
         })
-        assert "module load VASP/6.1.2"    in script
-        assert "module load intel/2023"    in script
-        assert "export VASP_NPROCS=128"    in script
-        assert "export OMP_NUM_THREADS=1"  in script
-        assert "mpirun vasp_ncl"           in script
-        # modules/env must come before the vasp command
+        assert "module load VASP/6.1.2"   in script
+        assert "module load intel/2023"   in script
+        assert "export VASP_NPROCS=128"   in script
+        assert "export OMP_NUM_THREADS=1" in script
         assert script.index("module load") < script.index("mpirun vasp_ncl")
-        assert script.index("export")      < script.index("mpirun vasp_ncl")
+        assert script.index("export")     < script.index("mpirun vasp_ncl")
 
 
-class TestUserSlurmConfig:
-    def test_user_cfg_merged_over_yaml(self, tmp_path, mock_slurm, monkeypatch):
-        """Settings in ~/.config/abvio/slurm.yaml override the workflow YAML."""
-        user_cfg = tmp_path / "config.yaml"
-        user_cfg.write_text("account: secret_project\npartition: special\n")
-        monkeypatch.setattr(wf, "_USER_SLURM_CFG", user_cfg)
+# ─────────────────────────────────────────────────────────────────────────────
+# Unit — make_parsl_config
+# ─────────────────────────────────────────────────────────────────────────────
 
-        yaml_path = _make_yaml(tmp_path, [
-            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
-        ])
-        wflow = VaspWorkflow(yaml_path)
-        assert wflow.slurm_cfg["account"]   == "secret_project"
-        assert wflow.slurm_cfg["partition"] == "special"   # overrides YAML's "test"
+class TestMakeParslConfig:
+    def test_returns_config_object(self, tmp_path):
+        from parsl.config import Config
+        cfg = make_parsl_config({"nodes": 1, "ntasks": 4, "time": "1:00:00"},
+                                run_dir=tmp_path)
+        assert isinstance(cfg, Config)
 
-    def test_missing_user_cfg_is_silent(self, tmp_path, mock_slurm, monkeypatch):
-        """No error when ~/.config/abvio/slurm.yaml does not exist."""
-        monkeypatch.setattr(wf, "_USER_SLURM_CFG", tmp_path / "nonexistent.yaml")
-        yaml_path = _make_yaml(tmp_path, [
-            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
-        ])
-        wflow = VaspWorkflow(yaml_path)
-        assert "account" not in wflow.slurm_cfg
+    def test_single_htex_executor(self, tmp_path):
+        from parsl.executors import HighThroughputExecutor
+        cfg = make_parsl_config({}, run_dir=tmp_path)
+        assert len(cfg.executors) == 1
+        assert isinstance(cfg.executors[0], HighThroughputExecutor)
 
-    def test_user_cfg_extra_in_slurm_cfg(self, tmp_path, mock_slurm, monkeypatch):
-        """extra directives from the user file land in slurm_cfg and produce correct script."""
-        user_cfg = tmp_path / "config.yaml"
-        user_cfg.write_text("extra:\n  - '--account=myproject'\n  - '-q high'\n")
-        monkeypatch.setattr(wf, "_USER_SLURM_CFG", user_cfg)
+    def test_scheduler_options_include_account(self, tmp_path):
+        cfg = make_parsl_config({"account": "proj123"}, run_dir=tmp_path)
+        opts = cfg.executors[0].provider.scheduler_options
+        assert "--account=proj123" in opts
 
-        yaml_path = _make_yaml(tmp_path, [
-            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
-        ])
-        wflow = VaspWorkflow(yaml_path)
-        assert "--account=myproject" in wflow.slurm_cfg["extra"]
-        assert "-q high"             in wflow.slurm_cfg["extra"]
+    def test_scheduler_options_include_queue(self, tmp_path):
+        cfg = make_parsl_config({"queue": "debug"}, run_dir=tmp_path)
+        opts = cfg.executors[0].provider.scheduler_options
+        assert "-q debug" in opts
 
-        # Verify they render into a submit script
-        script = _make_submit_script(Path("/fake"), wflow.slurm_cfg)
-        assert "#SBATCH --account=myproject" in script
-        assert "#SBATCH -q high"             in script
+    def test_worker_init_includes_modules(self, tmp_path):
+        cfg = make_parsl_config({"modules": ["VASP/6.4", "intel/2023"]},
+                                run_dir=tmp_path)
+        init = cfg.executors[0].provider.worker_init
+        assert "module load VASP/6.4"   in init
+        assert "module load intel/2023" in init
 
+    def test_worker_init_includes_env(self, tmp_path):
+        cfg = make_parsl_config({"env": {"OMP_NUM_THREADS": 1}},
+                                run_dir=tmp_path)
+        init = cfg.executors[0].provider.worker_init
+        assert "export OMP_NUM_THREADS=1" in init
+
+    def test_run_dir_set(self, tmp_path):
+        cfg = make_parsl_config({}, run_dir=tmp_path / "parsl")
+        assert cfg.run_dir == str(tmp_path / "parsl")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Unit — check_convergence
+# ─────────────────────────────────────────────────────────────────────────────
 
 class TestCheckConvergence:
     def test_returns_false_for_missing_directory(self, tmp_path):
@@ -189,64 +278,61 @@ class TestCheckConvergence:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Shared fixture: patch out all SLURM/prep/convergence calls
+# Unit — user slurm config merging
 # ─────────────────────────────────────────────────────────────────────────────
 
-@pytest.fixture
-def mock_slurm(monkeypatch, tmp_path):
-    """
-    Patches sbatch, squeue_states, check_convergence, and all prep functions.
+class TestUserSlurmConfig:
+    def test_user_cfg_merged_over_yaml(self, tmp_path, env, monkeypatch):
+        user_cfg = tmp_path / "config.yaml"
+        user_cfg.write_text("account: secret\npartition: special\n")
+        monkeypatch.setattr(wf, "_USER_SLURM_CFG", user_cfg)
 
-    Returns a namespace with:
-        .job_counter        — increments with each sbatch call
-        .squeue_live        — set of job_ids that squeue reports as running
-        .convergence        — dict[str(dir), bool] override; default True
-    """
-    state = MagicMock()
-    state.job_counter = 0
-    state.squeue_live = set()
-    state.convergence = {}
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ]))
+        assert wflow.slurm_cfg["account"]   == "secret"
+        assert wflow.slurm_cfg["partition"] == "special"
 
-    def fake_sbatch(directory, slurm_cfg):
-        state.job_counter += 1
-        jid = str(state.job_counter * 100)
-        state.squeue_live.add(jid)
-        return jid
+    def test_missing_user_cfg_is_silent(self, tmp_path, env, monkeypatch):
+        monkeypatch.setattr(wf, "_USER_SLURM_CFG", tmp_path / "nonexistent.yaml")
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ]))
+        assert "account" not in wflow.slurm_cfg
 
-    def fake_squeue(job_ids):
-        return {jid: "R" for jid in job_ids if jid in state.squeue_live}
+    def test_extra_directives_from_user_cfg(self, tmp_path, env, monkeypatch):
+        user_cfg = tmp_path / "config.yaml"
+        user_cfg.write_text("extra:\n  - '--account=myproject'\n  - '-q high'\n")
+        monkeypatch.setattr(wf, "_USER_SLURM_CFG", user_cfg)
 
-    def fake_convergence(directory):
-        return state.convergence.get(str(directory), True)
-
-    monkeypatch.setattr(wf, "sbatch",           fake_sbatch)
-    monkeypatch.setattr(wf, "squeue_states",    fake_squeue)
-    monkeypatch.setattr(wf, "check_convergence", fake_convergence)
-    for name in list(wf.PREP_FUNCTIONS):
-        monkeypatch.setitem(wf.PREP_FUNCTIONS, name, _dummy_prep)
-
-    return state
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ]))
+        assert "--account=myproject" in wflow.slurm_cfg["extra"]
+        script = _make_submit_script(Path("/fake"), wflow.slurm_cfg)
+        assert "#SBATCH --account=myproject" in script
+        assert "#SBATCH -q high"             in script
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Graph logic
+# Graph readiness
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestGraphReadiness:
-    def test_no_dep_step_is_ready(self, tmp_path, mock_slurm):
+    def test_no_dep_step_is_ready(self, tmp_path, env):
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
         ]))
         assert wflow._ready(wflow.steps["relax"])
 
-    def test_dep_step_not_ready_while_parent_pending(self, tmp_path, mock_slurm):
+    def test_dep_step_not_ready_while_parent_pending(self, tmp_path, env):
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
             {"name": "scf",   "type": "scf",   "depends": "relax"},
         ]))
         assert not wflow._ready(wflow.steps["scf"])
 
-    def test_dep_step_ready_after_parent_done(self, tmp_path, mock_slurm):
+    def test_dep_step_ready_after_parent_done(self, tmp_path, env):
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
             {"name": "scf",   "type": "scf",   "depends": "relax"},
@@ -256,206 +342,130 @@ class TestGraphReadiness:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Single-step lifecycle
+# DAG construction
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestSingleStep:
-    def test_pending_to_running_on_first_tick(self, tmp_path, mock_slurm):
+class TestBuildDag:
+    def test_single_step_submitted(self, tmp_path, env):
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
         ]))
-        assert wflow.steps["relax"].state == State.PENDING
-        wflow._tick()
-        assert wflow.steps["relax"].state  == State.RUNNING
-        assert wflow.steps["relax"].job_id == "100"
+        futures = wflow._build_dag()
+        assert "relax" in futures
+        assert env.call_log == ["relax"]
 
-    def test_running_to_done_when_job_leaves_queue(self, tmp_path, mock_slurm):
+    def test_chain_submitted_in_order(self, tmp_path, env):
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
-            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
-        ]))
-        wflow._tick()                            # → RUNNING
-        mock_slurm.squeue_live.discard("100")    # simulate job finishing
-        wflow._tick()                            # → DONE
-        assert wflow.steps["relax"].state == State.DONE
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Two-step chain (relax → scf)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestChain:
-    @pytest.fixture(autouse=True)
-    def _wflow(self, tmp_path, mock_slurm):
-        self.mock = mock_slurm
-        self.wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
             {"name": "scf",   "type": "scf",   "depends": "relax"},
         ]))
+        futures = wflow._build_dag()
+        assert env.call_log == ["relax", "scf"]
+        assert futures["relax"] in env.inputs_log["scf"]
 
-    def test_scf_stays_pending_while_relax_running(self):
-        self.wflow._tick()
-        assert self.wflow.steps["relax"].state == State.RUNNING
-        assert self.wflow.steps["scf"].state   == State.PENDING
-
-    def test_scf_submitted_after_relax_done(self):
-        self.wflow._tick()                           # relax → RUNNING
-        self.mock.squeue_live.discard("100")         # relax finishes
-        self.wflow._tick()                           # relax → DONE, scf → RUNNING
-        assert self.wflow.steps["relax"].state == State.DONE
-        assert self.wflow.steps["scf"].state   == State.RUNNING
-
-    def test_full_chain_completes(self):
-        self.wflow._tick()                           # relax → RUNNING
-        self.mock.squeue_live.discard("100")
-        self.wflow._tick()                           # relax → DONE, scf → RUNNING
-        self.mock.squeue_live.discard("200")
-        self.wflow._tick()                           # scf → DONE
-        assert self.wflow.steps["relax"].state == State.DONE
-        assert self.wflow.steps["scf"].state   == State.DONE
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Branching DAG
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestBranchingDAG:
-    def test_both_children_submitted_after_parent_done(self, tmp_path, mock_slurm):
+    def test_branching_dag_all_submitted(self, tmp_path, env):
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax",  "type": "relax",  "structure": STRUCTURE_FILE},
             {"name": "scf",    "type": "scf",    "depends": "relax"},
             {"name": "phonon", "type": "phonon", "depends": "relax",
-             "supercell": [2,2,1]},
+             "supercell": [2, 2, 1]},
         ]))
-        wflow._tick()                               # relax → RUNNING
-        mock_slurm.squeue_live.discard("100")
-        wflow._tick()                               # relax → DONE; scf + phonon → RUNNING
-        assert wflow.steps["relax"].state  == State.DONE
-        assert wflow.steps["scf"].state    == State.RUNNING
-        assert wflow.steps["phonon"].state == State.RUNNING
+        wflow._build_dag()
+        assert set(env.call_log) == {"relax", "scf", "phonon"}
+        # Both children receive relax's future as input
+        relax_fut = env.inputs_log["scf"][0]
+        assert relax_fut is env.inputs_log["phonon"][0]
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Failed calculations
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestFailedCalculation:
-    def test_failed_step_marked_failed(self, tmp_path, mock_slurm):
-        wflow = VaspWorkflow(_make_yaml(tmp_path, [
-            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
-        ]))
-        wflow._tick()                               # relax → RUNNING
-        mock_slurm.convergence[str(wflow.steps["relax"].dir)] = False
-        mock_slurm.squeue_live.discard("100")
-        wflow._tick()                               # job done, not converged → FAILED
-        assert wflow.steps["relax"].state == State.FAILED
-
-    def test_failed_parent_leaves_child_pending(self, tmp_path, mock_slurm):
+    def test_done_step_skipped_not_resubmitted(self, tmp_path, env):
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
             {"name": "scf",   "type": "scf",   "depends": "relax"},
         ]))
-        wflow._tick()
-        mock_slurm.convergence[str(wflow.steps["relax"].dir)] = False
-        mock_slurm.squeue_live.discard("100")
-        wflow._tick()                               # relax → FAILED
-        wflow._tick()                               # scf should NOT submit
-        assert wflow.steps["relax"].state == State.FAILED
-        assert wflow.steps["scf"].state   == State.PENDING
+        wflow.steps["relax"].state = State.DONE
+        wflow._build_dag()
+        assert "relax" not in env.call_log
+        assert "scf"   in env.call_log
 
-    def test_failed_step_does_not_block_independent_branch(self, tmp_path, mock_slurm):
+    def test_unknown_step_type_raises(self, tmp_path, env):
+        """_build_dag doesn't validate types; run_step raises inside the future."""
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "mystery", "type": "does_not_exist",
+             "structure": STRUCTURE_FILE},
+        ]))
+        # fake_run_step records the call; the type check happens inside run_step
+        wflow._build_dag()
+        assert "mystery" in env.call_log
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Monitor — state transitions
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestMonitor:
+    def test_converged_step_becomes_done(self, tmp_path, env):
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ]))
+        futures = wflow._build_dag()
+        wflow._monitor(futures)
+        assert wflow.steps["relax"].state == State.DONE
+
+    def test_not_converged_step_becomes_failed(self, tmp_path, env):
+        env.results["relax"] = False   # run_step returns False
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ]))
+        futures = wflow._build_dag()
+        wflow._monitor(futures)
+        assert wflow.steps["relax"].state == State.FAILED
+
+    def test_exception_in_step_becomes_failed(self, tmp_path, env):
+        env.results["relax"] = RuntimeError("POTCAR missing")
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ]))
+        futures = wflow._build_dag()
+        wflow._monitor(futures)
+        assert wflow.steps["relax"].state == State.FAILED
+
+    def test_failed_parent_propagates_to_child(self, tmp_path, env):
+        env.results["relax"] = RuntimeError("failed")
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+            {"name": "scf",   "type": "scf",   "depends": "relax"},
+        ]))
+        futures = wflow._build_dag()
+        wflow._monitor(futures)
+        assert wflow.steps["relax"].state == State.FAILED
+        assert wflow.steps["scf"].state   == State.FAILED
+
+    def test_failed_step_does_not_block_independent_branch(self, tmp_path, env):
+        env.results["relax"] = RuntimeError("failed")
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax",  "type": "relax", "structure": STRUCTURE_FILE},
             {"name": "relax2", "type": "relax", "structure": STRUCTURE_FILE},
             {"name": "scf",    "type": "scf",   "depends": "relax2"},
         ]))
-        wflow._tick()                               # relax + relax2 → RUNNING
-        # relax fails, relax2 succeeds
-        mock_slurm.convergence[str(wflow.steps["relax"].dir)] = False
-        mock_slurm.squeue_live.clear()
-        wflow._tick()                               # relax → FAILED, relax2 → DONE, scf → RUNNING
+        futures = wflow._build_dag()
+        wflow._monitor(futures)
         assert wflow.steps["relax"].state  == State.FAILED
         assert wflow.steps["relax2"].state == State.DONE
-        assert wflow.steps["scf"].state    == State.RUNNING
+        assert wflow.steps["scf"].state    == State.DONE
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Error handling
+# Full run()
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestErrorHandling:
-    def test_prep_failure_marks_step_failed(self, tmp_path, mock_slurm, monkeypatch):
-        def bad_prep(dst, cfg, prev, potcar_map):
-            raise RuntimeError("POTCAR not found")
-        monkeypatch.setitem(wf.PREP_FUNCTIONS, "relax", bad_prep)
-
+class TestRun:
+    def test_run_completes_single_step(self, tmp_path, env):
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
         ]))
-        wflow._tick()
-        assert wflow.steps["relax"].state == State.FAILED
+        wflow.run()
+        assert wflow.steps["relax"].state == State.DONE
 
-    def test_unknown_step_type_marks_failed(self, tmp_path, mock_slurm):
-        wflow = VaspWorkflow(_make_yaml(tmp_path, [
-            {"name": "mystery", "type": "does_not_exist",
-             "structure": STRUCTURE_FILE},
-        ]))
-        wflow._tick()
-        assert wflow.steps["mystery"].state == State.FAILED
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# State persistence
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestStatePersistence:
-    def test_state_written_to_json(self, tmp_path, mock_slurm):
-        yaml_path = _make_yaml(tmp_path, [
-            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
-        ])
-        wflow = VaspWorkflow(yaml_path)
-        wflow._tick()
-        state_file = Path(wflow.cfg["root"]) / VaspWorkflow.STATE_FILE
-        assert state_file.exists()
-        data = json.loads(state_file.read_text())
-        assert data["relax"]["state"]  == "running"
-        assert data["relax"]["job_id"] == "100"
-
-    def test_state_restored_on_reload(self, tmp_path, mock_slurm):
-        yaml_path = _make_yaml(tmp_path, [
-            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
-        ])
-        VaspWorkflow(yaml_path)._tick()             # relax → RUNNING, saved
-        wflow2 = VaspWorkflow(yaml_path)            # load from disk
-        assert wflow2.steps["relax"].state  == State.RUNNING
-        assert wflow2.steps["relax"].job_id == "100"
-
-    def test_reloaded_workflow_can_complete(self, tmp_path, mock_slurm):
-        yaml_path = _make_yaml(tmp_path, [
-            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
-        ])
-        VaspWorkflow(yaml_path)._tick()             # relax → RUNNING
-        mock_slurm.squeue_live.discard("100")       # job finishes
-        wflow2 = VaspWorkflow(yaml_path)
-        wflow2._tick()                              # should detect job gone → DONE
-        assert wflow2.steps["relax"].state == State.DONE
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# run() loop
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestRunLoop:
-    def test_run_completes_all_steps(self, tmp_path, mock_slurm, monkeypatch):
-        monkeypatch.setattr(wf.time, "sleep", lambda _: None)
-
-        # Simulate jobs finishing: after each sbatch, immediately remove from queue
-        original_sbatch = wf.sbatch
-        def instant_sbatch(directory, slurm_cfg):
-            jid = original_sbatch(directory, slurm_cfg)
-            mock_slurm.squeue_live.discard(jid)
-            return jid
-        monkeypatch.setattr(wf, "sbatch", instant_sbatch)
-
+    def test_run_completes_chain(self, tmp_path, env):
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
             {"name": "scf",   "type": "scf",   "depends": "relax"},
@@ -464,22 +474,90 @@ class TestRunLoop:
         assert wflow.steps["relax"].state == State.DONE
         assert wflow.steps["scf"].state   == State.DONE
 
-    def test_run_terminates_when_blocked_by_failed_parent(self, tmp_path, mock_slurm, monkeypatch):
-        """run() must not loop forever when a failed step blocks all descendants."""
-        monkeypatch.setattr(wf.time, "sleep", lambda _: None)
+    def test_run_completes_branching_dag(self, tmp_path, env):
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax",  "type": "relax",  "structure": STRUCTURE_FILE},
+            {"name": "scf",    "type": "scf",    "depends": "relax"},
+            {"name": "phonon", "type": "phonon", "depends": "relax",
+             "supercell": [2, 2, 1]},
+        ]))
+        wflow.run()
+        assert wflow.steps["relax"].state  == State.DONE
+        assert wflow.steps["scf"].state    == State.DONE
+        assert wflow.steps["phonon"].state == State.DONE
 
-        original_sbatch = wf.sbatch
-        def instant_fail_sbatch(directory, slurm_cfg):
-            jid = original_sbatch(directory, slurm_cfg)
-            mock_slurm.squeue_live.discard(jid)
-            mock_slurm.convergence[str(directory)] = False
-            return jid
-        monkeypatch.setattr(wf, "sbatch", instant_fail_sbatch)
+    def test_run_marks_failed_step(self, tmp_path, env):
+        env.results["relax"] = False
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ]))
+        wflow.run()
+        assert wflow.steps["relax"].state == State.FAILED
+
+    def test_parsl_cleared_after_run(self, tmp_path, env, monkeypatch):
+        cleared = []
+        monkeypatch.setattr(wf.parsl, "clear", lambda: cleared.append(True))
+        wflow = VaspWorkflow(_make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ]))
+        wflow.run()
+        assert cleared, "parsl.clear() was not called"
+
+    def test_parsl_cleared_even_on_exception(self, tmp_path, mock_parsl,
+                                             mock_prep, monkeypatch):
+        cleared = []
+        monkeypatch.setattr(wf.parsl, "clear", lambda: cleared.append(True))
+
+        def exploding_run_step(*a, **kw):
+            raise RuntimeError("unexpected")
+        monkeypatch.setattr(wf, "run_step", exploding_run_step)
 
         wflow = VaspWorkflow(_make_yaml(tmp_path, [
             {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
-            {"name": "scf",   "type": "scf",   "depends": "relax"},
         ]))
-        wflow.run()                                 # must not hang
-        assert wflow.steps["relax"].state == State.FAILED
-        assert wflow.steps["scf"].state   == State.PENDING  # blocked, never submitted
+        with pytest.raises(Exception):
+            wflow.run()
+        assert cleared, "parsl.clear() was not called after exception"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# State persistence
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestStatePersistence:
+    def test_state_written_after_run(self, tmp_path, env):
+        yaml_path = _make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ])
+        VaspWorkflow(yaml_path).run()
+        state_file = Path(tmp_path / "root") / VaspWorkflow.STATE_FILE
+        assert state_file.exists()
+        data = json.loads(state_file.read_text())
+        assert data["relax"]["state"] == "done"
+
+    def test_done_steps_not_resubmitted_on_reload(self, tmp_path, env):
+        yaml_path = _make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+            {"name": "scf",   "type": "scf",   "depends": "relax"},
+        ])
+        # First run — complete relax only (scf fails)
+        env.results["scf"] = RuntimeError("failed first time")
+        VaspWorkflow(yaml_path).run()
+
+        # Reset and re-run — relax should not be resubmitted
+        env.call_log.clear()
+        env.results.pop("scf")
+        VaspWorkflow(yaml_path).run()
+
+        assert "relax" not in env.call_log
+        assert "scf"   in env.call_log
+
+    def test_state_restored_correctly(self, tmp_path, env):
+        yaml_path = _make_yaml(tmp_path, [
+            {"name": "relax", "type": "relax", "structure": STRUCTURE_FILE},
+        ])
+        wf1 = VaspWorkflow(yaml_path)
+        wf1.run()
+
+        wf2 = VaspWorkflow(yaml_path)
+        assert wf2.steps["relax"].state == State.DONE

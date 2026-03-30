@@ -19,7 +19,7 @@ dependencies = [
     "mp_api",
     "pydantic",
     "rich",
-    "dask_jobqueue",
+    "parsl",
     "pyyaml",
 ]
 
@@ -29,7 +29,7 @@ dev = ["pytest"]
 [project.scripts]
 abvi = "abvio.cli:main"
 abvo = "abvio.outputs:main"
-abvw = "abvio.workflow:main"
+abflow = "abvio.workflow:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
